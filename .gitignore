@@ -1,0 +1,20 @@
+# Системные файлы
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Виртуальное окружение
+.venv/
+
+# Временные и выходные директории
+temp_uploads/
+ready_mp3/
+copied_mp3/
+source_mp3/
+archive_mp3/
+*.mp3
+
+# Настройки IDE
+.vscode/ 

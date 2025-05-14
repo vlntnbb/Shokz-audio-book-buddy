@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP3 AutoCut - Автономный интерфейс</title>
+    <style>
+        /* Общие стили */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+
+        h2 {
+            margin-bottom: 15px;
+            color: #34495e;
+            font-size: 1.5rem;
+        }
+
+        /* Стили для области загрузки файла */
+        .file-upload-container {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            background-color: #ecf0f1;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload-container.drag-over {
+            background-color: #d6eaf8;
+            border-color: #2980b9;
+        }
+
+        .file-upload-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .file-upload-btn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .file-upload-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 10px;
+            fill: #3498db;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        #clearFileBtn {
+            margin-top: 10px;
+            padding: 5px 15px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #clearFileBtn:hover {
+            background-color: #c0392b;
+        }
+
+        /* Стили для настроек */
+        .settings-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .slider-container {
+            margin-bottom: 20px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+
+        /* Стили для выходной директории */
+        .output-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .output-path-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .output-path-container label {
+            min-width: 180px;
+            font-weight: 500;
+        }
+
+        .output-path-container input[type="text"] {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+        
+        .info-text {
+            margin-top: 5px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        /* Стили для тултипов */
+        [data-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+        
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #34495e;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: normal;
+            width: max-content;
+            max-width: 300px;
+            z-index: 10;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            text-align: left;
+            font-weight: normal;
+            line-height: 1.4;
+        }
+        
+        [data-tooltip]::before {
+            content: "";
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%) translateY(100%);
+            border-width: 6px;
+            border-style: solid;
+            border-color: #34495e transparent transparent transparent;
+            z-index: 10;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        [data-tooltip]:hover::after,
+        [data-tooltip]:hover::before {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Стили для кнопки обработки */
+        .action-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .process-btn {
+            padding: 15px 30px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .process-btn:hover {
+            background-color: #27ae60;
+        }
+
+        .process-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        /* Стили для командной строки */
+        .command-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .command-output {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        .copy-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .copy-btn:hover {
+            background-color: #2980b9;
+        }
+
+        /* Стили для инструкций */
+        .instructions {
+            background-color: #f9f9f9;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+
+        /* ===== DARK THEME ===== */
+        body.dark-theme {
+            background-color: #181c1f;
+            color: #e0e0e0;
+        }
+        .dark-theme .container,
+        .dark-theme .settings-container,
+        .dark-theme .output-container,
+        .dark-theme .command-container {
+            background-color: #23272a;
+            color: #e0e0e0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .dark-theme input,
+        .dark-theme select,
+        .dark-theme textarea {
+            background: #23272a;
+            color: #e0e0e0;
+            border: 1px solid #444;
+        }
+        .dark-theme .file-upload-container {
+            background-color: #23272a;
+            border-color: #607d8b;
+        }
+        .dark-theme .file-upload-btn,
+        .dark-theme .copy-btn,
+        .dark-theme .process-btn {
+            background-color: #607d8b;
+        }
+        .dark-theme .file-upload-btn:hover,
+        .dark-theme .copy-btn:hover,
+        .dark-theme .process-btn:hover {
+            background-color: #455a64;
+        }
+        .dark-theme .command-output {
+            background-color: #11171b;
+            color: #e0e0e0;
+        }
+        .dark-theme [data-tooltip]::after {
+            background-color: #222;
+            color: #fff;
+            border-color: #222 transparent transparent transparent;
+        }
+        .dark-theme .instructions {
+            background-color: #23272a;
+            border-left: 4px solid #42a5f5;
+            color: #e0e0e0;
+        }
+        .dark-theme .instructions h3 {
+            color: #90caf9;
+        }
+        .dark-theme .instructions ol,
+        .dark-theme .instructions li {
+            color: #e0e0e0;
+        }
+        .dark-theme .file-info {
+            background-color: #23272a;
+            color: #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+        .dark-theme .file-info button {
+            background-color: #e57373;
+            color: #fff;
+        }
+        .dark-theme .file-info button:hover {
+            background-color: #c62828;
+        }
+        .file-info #fileName {
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: pre;
+            font-size: 0.95em;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <button id="themeToggleBtn" title="Переключить тему" style="position:fixed;top:18px;right:18px;z-index:1000;font-size:1.5rem;">🌙</button>
+    <div class="container">
+        <h1>MP3 AutoCut - Генератор команды</h1>
+        
+        <div class="instructions">
+            <h3>Как использовать:</h3>
+            <ol>
+                <li>Выберите MP3 файл и настройте параметры с помощью ползунков</li>
+                <li>Нажмите кнопку "Сгенерировать команду"</li>
+                <li>Скопируйте сгенерированную команду</li>
+                <li>Вставьте и выполните команду в терминале</li>
+            </ol>
+        </div>
+        
+        <div class="file-upload-container" id="dropArea" data-tooltip="Выберите MP3 файл для обработки. Вы можете перетащить файл сюда или нажать кнопку для выбора через диалог. Поддерживаются только файлы в формате MP3.">
+            <div class="file-upload-content">
+                <svg class="upload-icon" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 20h12M12 16V4m0 0l3.5 3.5M12 4L8.5 7.5" stroke="#3498db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <p>Перетащите MP3 файл сюда или</p>
+                <label for="fileInput" class="file-upload-btn">Выберите файл</label>
+                <input type="file" id="fileInput" accept=".mp3" hidden>
+            </div>
+            <div class="file-info" id="fileInfo" style="display: none;">
+                <p>Выбран файл: <span id="fileName">Нет файла</span></p>
+                <p>Размер: <span id="fileSize">0</span> МБ</p>
+                <button id="clearFileBtn">Очистить</button>
+            </div>
+        </div>
+
+        <div class="settings-container">
+            <h2>Параметры обработки</h2>
+            
+            <div class="slider-container">
+                <label for="durationSlider" data-tooltip="Желаемая длительность каждой части MP3 файла в секундах. Скрипт будет стараться делать части примерно такой длины, разрезая по тишине.">Длительность куска (сек): <span id="durationValue">180</span></label>
+                <input type="range" id="durationSlider" min="30" max="600" value="180" class="slider">
+            </div>
+            
+            <div class="slider-container">
+                <label for="windowSlider" data-tooltip="Размер окна для поиска тишины вокруг точки разделения. Чем больше окно, тем больше вероятность найти подходящую тишину, но части могут сильнее отличаться от заданной длительности.">Окно поиска тишины (сек): <span id="windowValue">10</span></label>
+                <input type="range" id="windowSlider" min="1" max="30" value="10" class="slider">
+            </div>
+            
+            <div class="slider-container">
+                <label for="thresholdSlider" data-tooltip="Уровень громкости в dBFS, ниже которого звук считается тишиной. Чем меньше значение (например, -60), тем тише должен быть звук, чтобы считаться тишиной. Чем больше значение (например, -20), тем больше звуков будет считаться тишиной.">Порог тишины (dBFS): <span id="thresholdValue">-40</span></label>
+                <input type="range" id="thresholdSlider" min="-60" max="-20" value="-40" class="slider">
+            </div>
+            
+            <div class="slider-container">
+                <label for="minSilenceSlider" data-tooltip="Минимальная длительность тишины в миллисекундах, которая будет учитываться при поиске точек разделения. Слишком короткие тишины могут быть просто паузами между словами, а не подходящими местами для разделения.">Мин. длина тишины (мс): <span id="minSilenceValue">500</span></label>
+                <input type="range" id="minSilenceSlider" min="100" max="2000" value="500" class="slider">
+            </div>
+            
+            <div class="slider-container">
+                <label for="speedSlider" data-tooltip="Коэффициент изменения скорости воспроизведения. Значения меньше 1.0 замедляют аудио, больше 1.0 - ускоряют. Наилучшие результаты достигаются в диапазоне 0.5-2.0. Значения выше 2.0 могут требовать специальной обработки и могут звучать неестественно.">Скорость воспроизведения: <span id="speedValue">1.0</span>x</label>
+                <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.1" value="1.0" class="slider">
+            </div>
+        </div>
+        
+        <div class="output-container">
+            <h2>Директории</h2>
+            <div class="output-path-container">
+                <label for="outputPath" data-tooltip="Директория, в которую будут сохранены обработанные MP3 файлы. По умолчанию это папка 'ready_mp3' в текущей директории.">Выходная директория:</label>
+                <input type="text" id="outputPath" value="ready_mp3">
+            </div>
+            <div class="output-path-container" style="margin-top: 15px;">
+                <label for="copyToPath" data-tooltip="Путь для копирования результатов на внешний диск или другое место. Обычно это путь к подключенному внешнему диску, например, '/Volumes/SWIM PRO' на macOS или 'D:\' на Windows.">Копировать в (--copy-to):</label>
+                <input type="text" id="copyToPath" value="/Volumes/SWIM PRO" placeholder="Путь для копирования результатов">
+            </div>
+            <div class="info-text">
+                <small>Путь для копирования результатов на внешний диск SWIM PRO. После успешного копирования файлы будут перемещены в папку copied_mp3.</small>
+            </div>
+            <div style="margin-top: 10px;">
+                <div>
+                    <label for="skipExisting" data-tooltip="Если включено, скрипт будет пропускать обработку файлов, для которых уже существует первый кусок в выходной директории. Полезно при повторном запуске, чтобы не обрабатывать одни и те же файлы дважды.">
+                        <input type="checkbox" id="skipExisting">
+                        Пропускать существующие файлы (--skip-existing)
+                    </label>
+                </div>
+                <div style="margin-top: 8px;">
+                    <label for="copyOnly" data-tooltip="Если включено, скрипт будет только копировать файлы из выходной директории в указанное место (--copy-to), а затем перемещать их в папку copied_mp3. Обработка MP3 файлов выполняться не будет. Используйте этот режим, если файлы уже обработаны и их нужно только скопировать.">
+                        <input type="checkbox" id="copyOnly">
+                        Только копирование (--copy-only)
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="action-container">
+            <button id="generateBtn" class="process-btn" disabled data-tooltip="Нажмите, чтобы сгенерировать команду для запуска скрипта с выбранными параметрами. Сгенерированную команду нужно будет скопировать и выполнить в терминале.">Сгенерировать команду</button>
+        </div>
+        
+        <div class="command-container" id="commandContainer" style="display: none;">
+            <h2>Команда для выполнения</h2>
+            <div class="command-output" id="commandOutput"></div>
+            <button id="copyBtn" class="copy-btn" data-tooltip="Копирует сгенерированную команду в буфер обмена, чтобы вы могли вставить её в терминал.">Скопировать команду</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Элементы интерфейса
+            const dropArea = document.getElementById('dropArea');
+            const fileInput = document.getElementById('fileInput');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            const clearFileBtn = document.getElementById('clearFileBtn');
+            const generateBtn = document.getElementById('generateBtn');
+            const commandContainer = document.getElementById('commandContainer');
+            const commandOutput = document.getElementById('commandOutput');
+            const copyBtn = document.getElementById('copyBtn');
+            const outputPath = document.getElementById('outputPath');
+            const copyToPath = document.getElementById('copyToPath');
+            const skipExisting = document.getElementById('skipExisting');
+            const copyOnly = document.getElementById('copyOnly');
+
+            // Ползунки параметров
+            const durationSlider = document.getElementById('durationSlider');
+            const durationValue = document.getElementById('durationValue');
+            const windowSlider = document.getElementById('windowSlider');
+            const windowValue = document.getElementById('windowValue');
+            const thresholdSlider = document.getElementById('thresholdSlider');
+            const thresholdValue = document.getElementById('thresholdValue');
+            const minSilenceSlider = document.getElementById('minSilenceSlider');
+            const minSilenceValue = document.getElementById('minSilenceValue');
+            const speedSlider = document.getElementById('speedSlider');
+            const speedValue = document.getElementById('speedValue');
+
+            // Переменная для хранения выбранного файла
+            let selectedFile = null;
+
+            // Обработчики событий для drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('drag-over');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('drag-over');
+            }
+
+            // Обработка события drop
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0 && files[0].type === 'audio/mpeg') {
+                    handleFiles(files);
+                } else {
+                    alert('Ошибка: Пожалуйста, выберите MP3 файл.');
+                }
+            }
+
+            // Обработка выбора файла через диалог
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    if (this.files[0].type === 'audio/mpeg') {
+                        handleFiles(this.files);
+                    } else {
+                        alert('Ошибка: Пожалуйста, выберите MP3 файл.');
+                        this.value = '';
+                    }
+                }
+            });
+
+            // Обработка выбранных файлов
+            function handleFiles(files) {
+                selectedFile = files[0];
+                
+                // Отображение информации о файле
+                fileName.textContent = selectedFile.name;
+                fileSize.textContent = (selectedFile.size / (1024 * 1024)).toFixed(2);
+                fileInfo.style.display = 'block';
+                
+                // Активация кнопки генерации
+                generateBtn.disabled = false;
+            }
+
+            // Очистка выбранного файла
+            clearFileBtn.addEventListener('click', function() {
+                selectedFile = null;
+                fileInput.value = '';
+                fileInfo.style.display = 'none';
+                generateBtn.disabled = true;
+                commandContainer.style.display = 'none';
+            });
+
+            // Обновление значений ползунков
+            durationSlider.addEventListener('input', function() {
+                durationValue.textContent = this.value;
+            });
+
+            windowSlider.addEventListener('input', function() {
+                windowValue.textContent = this.value;
+            });
+
+            thresholdSlider.addEventListener('input', function() {
+                thresholdValue.textContent = this.value;
+            });
+
+            minSilenceSlider.addEventListener('input', function() {
+                minSilenceValue.textContent = this.value;
+            });
+
+            speedSlider.addEventListener('input', function() {
+                speedValue.textContent = this.value;
+            });
+
+            // Функция для переключения доступности элементов настройки
+            function toggleProcessingSettings(enabled) {
+                // Получаем все ползунки
+                const sliders = document.querySelectorAll('.slider');
+                sliders.forEach(slider => {
+                    slider.disabled = !enabled;
+                    slider.parentElement.style.opacity = enabled ? '1' : '0.5';
+                });
+                
+                // Обновляем состояние области выбора файла
+                dropArea.style.opacity = enabled ? '1' : '0.5';
+                dropArea.style.pointerEvents = enabled ? 'auto' : 'none';
+                
+                // Обновляем текст кнопки
+                generateBtn.textContent = enabled ? 'Сгенерировать команду' : 'Сгенерировать команду копирования';
+            }
+            
+            // Обработчик для режима "только копирование"
+            copyOnly.addEventListener('change', function() {
+                if (this.checked) {
+                    // В режиме "только копирование" файл не требуется
+                    if (selectedFile) {
+                        selectedFile = null;
+                        fileInput.value = '';
+                        fileInfo.style.display = 'none';
+                    }
+                    // Активируем кнопку генерации команды
+                    generateBtn.disabled = false;
+                    // Отключаем настройки обработки
+                    toggleProcessingSettings(false);
+                    // Показываем предупреждение
+                    alert('В режиме "только копирование" выбор файла не требуется, но необходимо указать путь в поле "Копировать в"');
+                } else {
+                    // В обычном режиме требуется выбор файла
+                    generateBtn.disabled = !selectedFile;
+                    // Включаем настройки обработки
+                    toggleProcessingSettings(true);
+                }
+            });
+
+            // Генерация команды
+            generateBtn.addEventListener('click', function() {
+                // Проверка на выбор файла (только если не в режиме "только копирование")
+                if (!copyOnly.checked && !selectedFile) {
+                    alert('Ошибка: Файл не выбран.');
+                    return;
+                }
+
+                // Получение параметров
+                const params = {
+                    duration: durationSlider.value,
+                    window: windowSlider.value,
+                    threshold: thresholdSlider.value,
+                    minSilence: minSilenceSlider.value,
+                    speed: speedSlider.value,
+                    outputDir: outputPath.value.trim(),
+                    copyTo: copyToPath.value.trim(),
+                    skipExisting: skipExisting.checked,
+                    copyOnly: copyOnly.checked
+                };
+
+                // Проверка на режим "только копирование"
+                if (params.copyOnly && !params.copyTo) {
+                    alert('Ошибка: Для режима "только копирование" необходимо указать путь в поле "Копировать в"');
+                    return;
+                }
+                
+                // Проверка доступности пути для копирования
+                if (params.copyTo && !checkPathExists(params.copyTo)) {
+                    return; // Пользователь отменил операцию
+                }
+
+                // Получаем путь к папке, где лежит html
+                const scriptDir = window.location.pathname
+                    .replace(/\\/g, '/')
+                    .replace(/\/[^/]*$/, '')
+                    .replace(/%20/g, ' ');
+
+                // Формирование команды
+                let command = `cd "${scriptDir}" && python split_mp3.py`;
+                
+                // Добавление параметров в зависимости от режима
+                if (params.copyOnly) {
+                    // Режим "только копирование"
+                    command += ` --copy-only --output-dir "${params.outputDir}" --copy-to "${params.copyTo}"`;
+                } else {
+                    // Обычный режим обработки
+                    command += ` -i "${selectedFile.name}" -o "${params.outputDir}" -d ${params.duration} -w ${params.window} -t ${params.threshold} -m ${params.minSilence} -s ${params.speed}`;
+                    
+                    // Добавление опциональных параметров
+                    if (params.copyTo) {
+                        command += ` --copy-to "${params.copyTo}"`;
+                    }
+                    
+                    if (params.skipExisting) {
+                        command += ` --skip-existing`;
+                    }
+                }
+                
+                // Отображение команды
+                commandOutput.textContent = command;
+                commandContainer.style.display = 'block';
+            });
+
+            // Копирование команды в буфер обмена
+            copyBtn.addEventListener('click', function() {
+                const textToCopy = commandOutput.textContent;
+                
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        const originalText = this.textContent;
+                        this.textContent = 'Скопировано!';
+                        
+                        setTimeout(() => {
+                            this.textContent = originalText;
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Ошибка при копировании: ', err);
+                        alert('Не удалось скопировать команду. Пожалуйста, выделите и скопируйте вручную.');
+                    });
+            });
+            
+            // Функция для проверки доступности пути
+            function checkPathExists(path) {
+                // В браузере нет прямого способа проверить существование пути в файловой системе
+                // Это просто заглушка, которая предупреждает пользователя
+                // В реальном приложении это можно реализовать через API на сервере
+                
+                // Проверяем, похоже ли это на путь к внешнему диску
+                if (path.startsWith('/Volumes/') || path.match(/^[A-Z]:\\/)) {
+                    const diskName = path.startsWith('/Volumes/') 
+                        ? path.split('/')[2] 
+                        : path.split('\\')[0];
+                    
+                    return confirm(`Убедитесь, что внешний диск "${diskName}" подключен и доступен по пути: ${path}\n\nНажмите OK, если диск подключен, или Отмена, чтобы изменить путь.`);
+                }
+                
+                return true;
+            }
+            
+            // Проверяем путь к SWIM PRO при загрузке
+            setTimeout(() => {
+                const swimProPath = copyToPath.value;
+                if (swimProPath && swimProPath.includes('SWIM PRO')) {
+                    checkPathExists(swimProPath);
+                }
+            }, 1000);
+
+            // ===== Тема (ночная/дневная) =====
+            const themeBtn = document.getElementById('themeToggleBtn');
+            function setTheme(dark) {
+                document.body.classList.toggle('dark-theme', dark);
+                themeBtn.textContent = dark ? '☀️' : '🌙';
+            }
+            function getAutoDark() {
+                const h = new Date().getHours();
+                return (h >= 20 || h < 8);
+            }
+            function loadTheme() {
+                const saved = localStorage.getItem('theme');
+                if (saved === 'dark') return true;
+                if (saved === 'light') return false;
+                return getAutoDark();
+            }
+            setTheme(loadTheme());
+            themeBtn.onclick = () => {
+                const isDark = document.body.classList.toggle('dark-theme');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                themeBtn.textContent = isDark ? '☀️' : '🌙';
+            };
+        });
+    </script>
+</body>
+</html>
