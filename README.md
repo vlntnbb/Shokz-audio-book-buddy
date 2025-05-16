@@ -74,7 +74,7 @@ MP3 AutoCut — это программа с удобным графически
     Когда виртуальное окружение активировано, установите все необходимые библиотеки:
     ```bash
     python -m pip install -r requirements.txt
-    ```
+   ```
     Или просто `pip install -r requirements.txt`, если `pip` корректно связан с venv.
 
 5.  **Запустите GUI:**
