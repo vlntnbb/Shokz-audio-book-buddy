@@ -20,6 +20,7 @@ archive_mp3/
 
 # Настройки IDE
 .vscode/ 
+venv312/
 venv312/pyvenv.cfg
 venv312/bin/activate
 venv312/bin/activate.csh

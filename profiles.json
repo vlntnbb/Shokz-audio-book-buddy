@@ -1,0 +1,36 @@
+{
+  "Дефолт": {
+    "input_dir": "source_mp3",
+    "output_dir": "ready_mp3",
+    "duration": 100,
+    "window": 10,
+    "threshold": -40,
+    "min_silence": 500,
+    "speed": 1.4,
+    "copy_to": "",
+    "copy_to_enabled": false
+  },
+  "my swim pro": {
+    "input_dir": "source_mp3",
+    "output_dir": "ready_mp3",
+    "duration": 100,
+    "window": 10,
+    "threshold": -30,
+    "min_silence": 500,
+    "speed": 1.5,
+    "copy_to": "/Volumes/SWIM PRO",
+    "copy_to_enabled": true
+  },
+  "my swim pro voice": {
+    "input_dir": "source_mp3",
+    "output_dir": "ready_mp3",
+    "duration": 100,
+    "window": 10,
+    "threshold": -30,
+    "min_silence": 500,
+    "speed": 1.5,
+    "copy_to": "/Volumes/SWIM PRO",
+    "copy_to_enabled": true,
+    "tts_progress": true
+  }
+}

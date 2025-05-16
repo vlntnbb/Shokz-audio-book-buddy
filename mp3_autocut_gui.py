@@ -4,6 +4,7 @@ import subprocess
 import threading
 import json
 from PyQt5 import QtWidgets, QtCore
+import datetime
 
 PROFILES_FILE = "profiles.json"
 DEFAULT_PROFILE = {
@@ -89,6 +90,7 @@ class MainWindow(QtWidgets.QWidget):
 
         # Сначала объявляем все поля
         self.input_dir = QtWidgets.QLineEdit()
+        self.input_dir.setToolTip("Папка с исходными MP3-файлами. Поиск происходит рекурсивно, включая все подпапки. Пример: source_mp3")
         self.input_dir_btn = QtWidgets.QPushButton("...")
         self.input_dir_btn.setFixedWidth(30)
         self.input_dir_btn.clicked.connect(self.select_input_dir)
@@ -97,6 +99,7 @@ class MainWindow(QtWidgets.QWidget):
         input_dir_layout.addWidget(self.input_dir_btn)
 
         self.output_dir = QtWidgets.QLineEdit()
+        self.output_dir.setToolTip("Папка для сохранения нарезанных MP3-файлов. Будет создана, если не существует. Пример: ready_mp3")
         self.output_dir_btn = QtWidgets.QPushButton("...")
         self.output_dir_btn.setFixedWidth(30)
         self.output_dir_btn.clicked.connect(self.select_output_dir)
@@ -105,8 +108,10 @@ class MainWindow(QtWidgets.QWidget):
         output_dir_layout.addWidget(self.output_dir_btn)
 
         self.copy_to_enabled = QtWidgets.QCheckBox("Копировать на внешний диск (copy-to)")
+        self.copy_to_enabled.setToolTip("Если включено — после обработки все файлы будут скопированы на указанный внешний диск или папку (например, /Volumes/SHOKZ). После копирования исходные файлы могут быть перемещены в папку copied_mp3.")
         self.copy_to_enabled.stateChanged.connect(self.toggle_copy_to)
         self.copy_to = QtWidgets.QLineEdit()
+        self.copy_to.setToolTip("Путь к папке/диску для копирования результата. Например: /Volumes/SHOKZ или D:/AUDIOBOOKS. Обязательно для режима копирования.")
         self.copy_to_btn = QtWidgets.QPushButton("...")
         self.copy_to_btn.setFixedWidth(30)
         self.copy_to_btn.clicked.connect(self.select_copy_to_dir)
@@ -117,12 +122,22 @@ class MainWindow(QtWidgets.QWidget):
         self.copy_to_widget.setLayout(copy_to_layout)
 
         self.duration = QtWidgets.QSpinBox(); self.duration.setRange(10, 3600)
+        self.duration.setToolTip("Желаемая длительность одного куска (секунды). Например, 100 — куски по ~1.5 минуты. Влияет на размер файлов и удобство навигации.")
         self.window = QtWidgets.QSpinBox(); self.window.setRange(1, 60)
+        self.window.setToolTip("Окно поиска тишины (секунды, ± от точки разреза). Чем больше — тем выше шанс найти тишину, но обработка дольше.")
         self.threshold = QtWidgets.QSpinBox(); self.threshold.setRange(-80, 0)
+        self.threshold.setToolTip("Порог тишины (dBFS). Чем ближе к 0 — тем менее тихие участки считаются тишиной. Обычно -40 оптимально.")
         self.min_silence = QtWidgets.QSpinBox(); self.min_silence.setRange(50, 10000)
+        self.min_silence.setToolTip("Минимальная длина тишины (миллисекунды). Короткие паузы игнорируются. Например, 500 мс — только заметные паузы.")
         self.speed = QtWidgets.QDoubleSpinBox(); self.speed.setRange(0.5, 10.0); self.speed.setSingleStep(0.05)
+        self.speed.setToolTip("Изменение скорости воспроизведения. 1.0 — без изменений, 1.4 — ускорить на 40%. Для atempo >2.0 возможны артефакты.")
         self.skip_existing = QtWidgets.QCheckBox("Пропускать уже обработанные")
+        self.skip_existing.setToolTip("Если включено — файлы, для которых уже есть первый кусок в папке назначения, будут пропущены. Ускоряет повторную обработку.")
         self.copy_only = QtWidgets.QCheckBox("Только копировать/перемещать (без обработки)")
+        self.copy_only.setToolTip("В этом режиме нарезка не выполняется, а только копирование/перемещение файлов из папки результатов на внешний диск и/или в папку copied_mp3.")
+        self.copy_only.stateChanged.connect(self.toggle_processing_fields)
+        self.tts_progress = QtWidgets.QCheckBox("Вставлять голосовое сообщение о прогрессе")
+        self.tts_progress.setToolTip("В начало первого куска каждого файла будет вставлено голосовое сообщение: процент прослушанной книги и общая длительность. На Mac используется голос Yuri, на Win/Linux — pyttsx3.")
 
         # Теперь layout и форма
         form = QtWidgets.QFormLayout()
@@ -137,6 +152,7 @@ class MainWindow(QtWidgets.QWidget):
         form.addRow(self.copy_only)
         form.addRow(self.copy_to_enabled)
         form.addRow("Папка для копирования (copy-to)", self.copy_to_widget)
+        form.addRow(self.tts_progress)
         layout.addLayout(form)
 
         # Кнопки
@@ -176,6 +192,7 @@ class MainWindow(QtWidgets.QWidget):
         self.copy_to.setText(p.get("copy_to", ""))
         self.copy_to_enabled.setChecked(p.get("copy_to_enabled", False))
         self.toggle_copy_to(None)
+        self.tts_progress.setChecked(p.get("tts_progress", False))
 
     def save_current_profile(self):
         current_name = self.profile_combo.currentText()
@@ -199,7 +216,8 @@ class MainWindow(QtWidgets.QWidget):
                 "min_silence": self.min_silence.value(),
                 "speed": self.speed.value(),
                 "copy_to": self.copy_to.text(),
-                "copy_to_enabled": self.copy_to_enabled.isChecked()
+                "copy_to_enabled": self.copy_to_enabled.isChecked(),
+                "tts_progress": self.tts_progress.isChecked()
             }
             self.save_profiles()
             self.profile_combo.blockSignals(True)
@@ -225,7 +243,7 @@ class MainWindow(QtWidgets.QWidget):
             self.load_profile("Дефолт")
 
     def build_cmd(self):
-        cmd = [sys.executable, "split_mp3.py"]
+        cmd = [sys.executable, "-u", "split_mp3.py"]
         if self.copy_only.isChecked():
             cmd.append("--copy-only")
         if self.input_dir.text():
@@ -234,6 +252,8 @@ class MainWindow(QtWidgets.QWidget):
             cmd += ["-o", self.output_dir.text()]
         if self.copy_to_enabled.isChecked() and self.copy_to.text():
             cmd += ["--copy-to", self.copy_to.text()]
+        if self.tts_progress.isChecked():
+            cmd.append("--tts-progress")
         if not self.copy_only.isChecked():
             cmd += ["-d", str(self.duration.value())]
             cmd += ["-w", str(self.window.value())]
@@ -262,7 +282,9 @@ class MainWindow(QtWidgets.QWidget):
         self.stop_btn.setEnabled(False)
 
     def append_log(self, text):
-        self.log_area.appendPlainText(text.rstrip())
+        for line in text.rstrip().splitlines():
+            ts = datetime.datetime.now().strftime('%H:%M:%S')
+            self.log_area.appendPlainText(f'[{ts}] {line}')
 
     def on_finished(self):
         self.start_btn.setEnabled(True)
@@ -283,6 +305,16 @@ class MainWindow(QtWidgets.QWidget):
         dir = QtWidgets.QFileDialog.getExistingDirectory(self, "Выбери папку для копирования (copy-to)")
         if dir:
             self.copy_to.setText(dir)
+
+    def toggle_processing_fields(self, state):
+        enabled = not self.copy_only.isChecked()
+        self.duration.setEnabled(enabled)
+        self.window.setEnabled(enabled)
+        self.threshold.setEnabled(enabled)
+        self.min_silence.setEnabled(enabled)
+        self.speed.setEnabled(enabled)
+        self.tts_progress.setEnabled(enabled)
+        self.skip_existing.setEnabled(enabled)
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

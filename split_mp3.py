@@ -6,6 +6,15 @@ import hashlib # <-- Добавляем hashlib для хеш-сумм
 from pydub import AudioSegment
 from pydub.silence import detect_silence
 from pydub.exceptions import CouldntDecodeError # Import specific exception
+import pyttsx3
+from tempfile import NamedTemporaryFile
+import platform
+import subprocess
+import builtins
+
+def print(*args, **kwargs):
+    kwargs['flush'] = True
+    return builtins.print(*args, **kwargs)
 
 def find_silent_split_point(audio_segment, target_time_ms, search_window_ms, silence_thresh_db, min_silence_len_ms):
     """
@@ -59,7 +68,7 @@ def find_silent_split_point(audio_segment, target_time_ms, search_window_ms, sil
     return split_time
 
 
-def split_mp3(input_file, output_dir, target_chunk_duration_s=180, search_window_s=10, silence_thresh_db=-40, min_silence_len_ms=500, speed_factor=1.0):
+def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window_s=10, silence_thresh_db=-40, min_silence_len_ms=500, speed_factor=1.0):
     """
     Разделяет ОДИН MP3 файл на части по ~target_chunk_duration_s, стараясь резать по тишине.
     Сохраняет части в указанную output_dir, опционально изменяя скорость.
@@ -407,6 +416,40 @@ def move_files_structure(source_root, move_dest_root):
     return success
 
 
+def get_total_and_cumulative_durations(mp3_files):
+    total = 0
+    cumulative = [0]
+    for f in mp3_files:
+        dur = len(AudioSegment.from_mp3(f))
+        total += dur
+        cumulative.append(total)
+    return total, cumulative[:-1]  # cumulative[i] — сумма до i-го файла
+
+def tts_to_wav(text, lang='ru'):
+    with NamedTemporaryFile(delete=False, suffix='.wav') as f:
+        if platform.system() == 'Darwin':
+            # Используем системный say с голосом Yuri (Enhanced)
+            voice = 'Yuri (Enhanced)'
+            subprocess.run(['say', '-v', voice, '-o', f.name, '--data-format=LEI16@44100', text])
+        else:
+            # pyttsx3 для Windows/Linux
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 180)
+            # Пытаемся найти русский голос, если нет — используем дефолт
+            voices = engine.getProperty('voices')
+            ru_voices = [v.id for v in voices if 'ru' in v.id or 'russian' in v.name.lower()]
+            if ru_voices:
+                engine.setProperty('voice', ru_voices[0])
+            engine.save_to_file(text, f.name)
+            engine.runAndWait()
+        return f.name
+
+def format_time(ms):
+    s = ms // 1000
+    h = s // 3600
+    m = (s % 3600) // 60
+    return h, m
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Рекурсивно ищет MP3, разделяет, изменяет скорость, копирует и перемещает результат.",
@@ -424,12 +467,13 @@ if __name__ == "__main__":
 
     # Аргументы для обработки
     processing_group = parser.add_argument_group('Параметры обработки (игнорируются при --copy-only)')
-    processing_group.add_argument("-d", "--duration", type=int, default=180, help="Желаемая длительность куска в сек. По умолчанию: 180.")
+    processing_group.add_argument("-d", "--duration", type=int, default=100, help="Желаемая длительность куска в сек. По умолчанию: 100.")
     processing_group.add_argument("-w", "--window", type=int, default=10, help="Окно поиска тишины в сек. (+/- window/2). По умолчанию: 10.")
     processing_group.add_argument("-t", "--threshold", type=int, default=-40, help="Порог тишины в dBFS. По умолчанию: -40.")
     processing_group.add_argument("-m", "--min-silence", type=int, default=500, help="Мин. длина тишины в мс. По умолчанию: 500.")
     processing_group.add_argument("-s", "--speed", type=float, default=1.0, help="Коэффициент скорости (0.5-2.0). По умолчанию: 1.0.")
     processing_group.add_argument("--skip-existing", action='store_true', help="Пропускать обработку, если 1-й кусок уже есть.")
+    processing_group.add_argument("--tts-progress", action='store_true', help="Вставлять голосовое сообщение о прогрессе в первый кусок каждого файла")
 
     args = parser.parse_args()
 
@@ -489,49 +533,94 @@ if __name__ == "__main__":
         processed_files = 0
         error_files = 0
 
-        # --- Рекурсивный обход и обработка --- 
+        # --- Новый блок: вычисляем длительности ---
+        import glob
+        all_mp3 = []
         for root, dirs, files in os.walk(input_root_dir):
             files.sort()
-            dirs.sort()
+            for f in files:
+                if f.lower().endswith('.mp3'):
+                    all_mp3.append(os.path.join(root, f))
+        all_mp3.sort()  # сортировка по имени
+        total_dur, cumulative_durs = get_total_and_cumulative_durations(all_mp3)
+
+        # --- Рекурсивный обход и обработка --- 
+        for idx, (root, dirs, files) in enumerate(os.walk(input_root_dir)):
+            files.sort()
             mp3_files = [f for f in files if f.lower().endswith('.mp3')]
             if not mp3_files:
                 continue
-
             relative_path = os.path.relpath(root, input_root_dir)
             current_output_dir = os.path.join(output_root_dir, relative_path)
             if not os.path.isdir(current_output_dir):
-                 try:
-                     os.makedirs(current_output_dir)
-                 except OSError as e:
-                     print(f"Ошибка создания поддиректории {current_output_dir}: {e}. Пропуск файлов в этой папке.")
-                     error_files += len(mp3_files)
-                     continue
-
-            for filename in mp3_files:
+                try:
+                    os.makedirs(current_output_dir)
+                except OSError as e:
+                    print(f"Ошибка создания поддиректории {current_output_dir}: {e}. Пропуск файлов в этой папке.")
+                    error_files += len(mp3_files)
+                    continue
+            for file_idx, filename in enumerate(mp3_files):
                 found_files += 1
                 input_file_path = os.path.join(root, filename)
                 base_output_name = os.path.splitext(filename)[0]
                 potential_first_chunk = os.path.join(current_output_dir, f"{base_output_name}_001.mp3")
-
                 if args.skip_existing and os.path.exists(potential_first_chunk):
                     print(f"--- Пропуск файла (найден существующий кусок): {input_file_path} ---")
                     continue
-
-                try:
-                     split_mp3(
-                        input_file_path,
-                        current_output_dir,
-                        target_chunk_duration_s=args.duration,
-                        search_window_s=args.window,
-                        silence_thresh_db=args.threshold,
-                        min_silence_len_ms=args.min_silence,
-                        speed_factor=args.speed
-                     )
-                     processed_files += 1
-                except Exception as e:
-                     print(f"\n!!! КРИТИЧЕСКАЯ ОШИБКА при обработке файла {input_file_path}: {e}")
-                     print("    Продолжение со следующим файлом...\n")
-                     error_files += 1
+                if args.tts_progress:
+                    # --- вычисляем процент и генерируем TTS ---
+                    try:
+                        file_idx_in_all = all_mp3.index(input_file_path)
+                    except ValueError:
+                        file_idx_in_all = 0
+                    percent = int(round(100 * cumulative_durs[file_idx_in_all] / total_dur)) if total_dur > 0 else 0
+                    h, m = format_time(total_dur)
+                    tts_text = f"вы прослушали {percent} процентов книги длительностью {h} часов {m} минут"
+                    tts_wav = tts_to_wav(tts_text)
+                    # --- нарезка ---
+                    def split_mp3_with_tts(input_file, output_dir, *args_, **kwargs_):
+                        from pydub import AudioSegment
+                        chunks = []
+                        audio = AudioSegment.from_mp3(input_file)
+                        split_mp3(input_file, output_dir, *args_, **kwargs_)
+                        first_chunk = os.path.join(output_dir, f"{base_output_name}_001.mp3")
+                        if os.path.exists(first_chunk):
+                            seg1 = AudioSegment.from_wav(tts_wav)
+                            seg2 = AudioSegment.from_mp3(first_chunk)
+                            combined = seg1 + seg2
+                            combined.export(first_chunk, format="mp3")
+                            os.remove(tts_wav)
+                    try:
+                        split_mp3_with_tts(
+                            input_file_path,
+                            current_output_dir,
+                            target_chunk_duration_s=args.duration,
+                            search_window_s=args.window,
+                            silence_thresh_db=args.threshold,
+                            min_silence_len_ms=args.min_silence,
+                            speed_factor=args.speed
+                        )
+                        processed_files += 1
+                    except Exception as e:
+                        print(f"\n!!! КРИТИЧЕСКАЯ ОШИБКА при обработке файла {input_file_path}: {e}")
+                        print("    Продолжение со следующим файлом...\n")
+                        error_files += 1
+                else:
+                    try:
+                        split_mp3(
+                            input_file_path,
+                            current_output_dir,
+                            target_chunk_duration_s=args.duration,
+                            search_window_s=args.window,
+                            silence_thresh_db=args.threshold,
+                            min_silence_len_ms=args.min_silence,
+                            speed_factor=args.speed
+                        )
+                        processed_files += 1
+                    except Exception as e:
+                        print(f"\n!!! КРИТИЧЕСКАЯ ОШИБКА при обработке файла {input_file_path}: {e}")
+                        print("    Продолжение со следующим файлом...\n")
+                        error_files += 1
 
         # --- Вывод статистики обработки --- 
         print("\n======================================")
@@ -553,4 +642,5 @@ if __name__ == "__main__":
             else:
                 print("Копирование не удалось. Перемещение не будет выполнено.")
         else:
+            print("\nКопирование на внешний диск не запрашивалось (опция --copy-to не указана), перемещение не выполняется.") 
             print("\nКопирование на внешний диск не запрашивалось (опция --copy-to не указана), перемещение не выполняется.") 
