@@ -31,6 +31,38 @@
     "speed": 1.5,
     "copy_to": "/Volumes/SWIM PRO",
     "copy_to_enabled": true,
-    "tts_progress": true
+    "tts_progress": true,
+    "norm_dbfs": -0.1,
+    "enable_normalization": true
+  },
+  "my swim pro voice no copy": {
+    "input_dir": "source_mp3",
+    "output_dir": "ready_mp3",
+    "duration": 100,
+    "window": 10,
+    "threshold": -30,
+    "min_silence": 500,
+    "speed": 1.5,
+    "copy_to": "/Volumes/SWIM PRO",
+    "copy_to_enabled": false,
+    "tts_progress": true,
+    "norm_dbfs": -0.1,
+    "enable_normalization": true
+  },
+  "my swim pro copy only": {
+    "input_dir": "source_mp3",
+    "output_dir": "ready_mp3",
+    "duration": 100,
+    "window": 10,
+    "threshold": -30,
+    "min_silence": 500,
+    "speed": 1.5,
+    "copy_to": "/Volumes/SWIM PRO",
+    "copy_to_enabled": true,
+    "tts_progress": false,
+    "norm_dbfs": -0.1,
+    "enable_normalization": false,
+    "skip_existing": false,
+    "copy_only": true
   }
 }

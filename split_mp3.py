@@ -6,11 +6,33 @@ import hashlib # <-- Добавляем hashlib для хеш-сумм
 from pydub import AudioSegment
 from pydub.silence import detect_silence
 from pydub.exceptions import CouldntDecodeError # Import specific exception
+from pydub.effects import normalize # <--- Импортируем normalize
 import pyttsx3
 from tempfile import NamedTemporaryFile
 import platform
 import subprocess
 import builtins
+
+# Добавим функцию для нормализации
+def normalize_audio(audio_segment, target_dbfs=-1.0):
+    """Нормализует громкость аудиосегмента до target_dbfs по пиковому уровню."""
+    if audio_segment.dBFS == float('-inf'): # Если тишина, то не нормализуем
+        print(f"    Нормализация (пиковая): Сегмент представляет собой тишину (уровень: {audio_segment.dBFS:.2f} dBFS). Нормализация не применяется.")
+        return audio_segment
+    
+    # pydub.effects.normalize устанавливает самый громкий пик на (0 - headroom) dBFS.
+    # Если target_dbfs = -0.1, то headroom = 0.1
+    # Если target_dbfs = 0.0, то headroom = 0.0
+    # headroom не может быть отрицательным.
+    headroom = abs(target_dbfs) 
+    if target_dbfs > 0: # Убедимся, что target_dbfs не положительный, т.к. это пиковый уровень
+        print(f"    Предупреждение: Целевой пиковый уровень {target_dbfs} dBFS > 0. Установлен на 0 dBFS (headroom 0.0).")
+        headroom = 0.0
+
+    print(f"    Нормализация (пиковая): Начальный RMS: {audio_segment.dBFS:.2f} dBFS, Начальный пик: {audio_segment.max_dBFS:.2f} dBFS. Целевой пик: {target_dbfs:.2f} dBFS (headroom: {headroom:.2f} dB)")
+    normalized_segment = normalize(audio_segment, headroom=headroom)
+    print(f"    Нормализация (пиковая): RMS после: {normalized_segment.dBFS:.2f} dBFS, Пик после: {normalized_segment.max_dBFS:.2f} dBFS")
+    return normalized_segment
 
 def print(*args, **kwargs):
     kwargs['flush'] = True
@@ -68,10 +90,10 @@ def find_silent_split_point(audio_segment, target_time_ms, search_window_ms, sil
     return split_time
 
 
-def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window_s=10, silence_thresh_db=-40, min_silence_len_ms=500, speed_factor=1.0):
+def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window_s=10, silence_thresh_db=-40, min_silence_len_ms=500, speed_factor=1.0, target_normalization_dbfs=-0.1, enable_normalization=False):
     """
     Разделяет ОДИН MP3 файл на части по ~target_chunk_duration_s, стараясь резать по тишине.
-    Сохраняет части в указанную output_dir, опционально изменяя скорость.
+    Сохраняет части в указанную output_dir, опционально изменяя скорость и нормализуя громкость.
     """
     if not os.path.exists(input_file):
         print(f"Ошибка: Файл не найден - {input_file}")
@@ -197,22 +219,37 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
         output_filename = os.path.join(output_dir, f"{base_filename}_{chunk_index:03d}.mp3")
 
         if len(chunk) > 0:
-             export_params = {}
-             if speed_factor != 1.0:
-                 # Basic atempo filter. For speed > 2.0, might need 'atempo=2.0,atempo=...'
-                 # We pass it directly, ffmpeg might handle simple cases or fail gracefully.
-                 export_params["parameters"] = ["-filter:a", f"atempo={speed_factor}"]
-                 # Estimate new duration for logging
-                 estimated_new_duration = len(chunk) / speed_factor
-                 print(f"  Экспорт куска {chunk_index}: {output_filename} (Ориг. длина: {len(chunk)/1000:.2f}s, Ожид. новая: {estimated_new_duration/1000:.2f}s)")
-             else:
-                 print(f"  Экспорт куска {chunk_index}: {output_filename} (Длительность: {len(chunk)/1000:.2f}s)")
+            # Нормализация перед экспортом, если включена
+            current_chunk_to_export = chunk # По умолчанию экспортируем оригинальный чанк
+            if enable_normalization:
+                initial_dbfs = chunk.dBFS
+                print(f"  Кусок {chunk_index}: Начальный уровень громкости: {initial_dbfs:.2f} dBFS.") # Это RMS
+                
+                normalized_chunk = normalize_audio(chunk, target_dbfs=target_normalization_dbfs)
+                # final_dbfs = normalized_chunk.dBFS # Это RMS после нормализации
+                # Обновим лог, чтобы было понятнее, что это пиковая нормализация
+                print(f"  Кусок {chunk_index}: Пиковая нормализация до {target_normalization_dbfs} dBFS выполнена. RMS после: {normalized_chunk.dBFS:.2f} dBFS, Пик после: {normalized_chunk.max_dBFS:.2f} dBFS.")
+                current_chunk_to_export = normalized_chunk # Экспортируем нормализованный чанк
+            else:
+                print(f"  Кусок {chunk_index}: Нормализация отключена. RMS: {chunk.dBFS:.2f} dBFS, Пик: {chunk.max_dBFS:.2f} dBFS.")
 
-             try:
-                 # Use parameters for ffmpeg filters/options
-                 chunk.export(output_filename, format="mp3", parameters=export_params.get("parameters"))
-             except Exception as e:
-                 print(f"  Ошибка экспорта куска {chunk_index} ({output_filename}): {e}")
+            export_params = {}
+            if speed_factor != 1.0:
+                # Basic atempo filter. For speed > 2.0, might need 'atempo=2.0,atempo=...'
+                # We pass it directly, ffmpeg might handle simple cases or fail gracefully.
+                export_params["parameters"] = ["-filter:a", f"atempo={speed_factor}"]
+                # Estimate new duration for logging
+                estimated_new_duration = len(chunk) / speed_factor
+                print(f"  Экспорт куска {chunk_index}: {output_filename} (Ориг. длина: {len(chunk)/1000:.2f}s, Ожид. новая: {estimated_new_duration/1000:.2f}s)")
+            else:
+                print(f"  Экспорт куска {chunk_index}: {output_filename} (Длительность: {len(chunk)/1000:.2f}s)")
+
+            try:
+                # Use parameters for ffmpeg filters/options
+                # Экспортируем нужный чанк (оригинальный или нормализованный)
+                current_chunk_to_export.export(output_filename, format="mp3", parameters=export_params.get("parameters"))
+            except Exception as e:
+                print(f"  Ошибка экспорта куска {chunk_index} ({output_filename}): {e}")
         else:
              # print(f"  Предупреждение: Кусок {chunk_index} пуст (длительность 0ms). Экспорт пропущен.")
              pass
@@ -393,16 +430,32 @@ def move_files_structure(source_root, move_dest_root):
             print(f" ОШИБКА ПЕРЕМЕЩЕНИЯ! {e}")
             move_errors += 1
 
-    # Попытка удалить пустые директории в источнике (опционально)
-    # Это может быть сложно и рискованно, если в папке есть что-то еще.
-    # Пока оставим исходную структуру папок пустой.
-    # try:
-    #     for root, dirs, files in os.walk(abs_source_root, topdown=False):
-    #         if not dirs and not files:
-    #             print(f"Удаление пустой исходной папки: {root}")
-    #             os.rmdir(root)
-    # except OSError as e:
-    #     print(f"Ошибка при удалении пустых исходных папок: {e}")
+    # После перемещения всех файлов, удаляем пустые директории в источнике
+    print(f"\nПроверка и удаление пустых папок в исходной директории: {abs_source_root}...")
+    deleted_folders_count = 0
+    try:
+        # Проходим по дереву папок снизу вверх (topdown=False)
+        # Это важно, чтобы сначала пытаться удалить дочерние папки, а потом родительские
+        for root, dirs, files in os.walk(abs_source_root, topdown=False):
+            if not dirs and not files: # Если в папке нет ни подпапок, ни файлов
+                # Проверяем, что это не сама корневая папка, из которой перемещали,
+                # если только она не была единственной и теперь пуста.
+                # Хотя os.rmdir(abs_source_root) сработает, если она пуста.
+                try:
+                    os.rmdir(root)
+                    print(f"  Удалена пустая папка: {root}")
+                    deleted_folders_count +=1
+                except OSError as e:
+                    # Возможна ошибка, если папка не пуста (например, из-за .DS_Store или других скрытых файлов)
+                    # или если это корень файловой системы (хотя это маловероятно здесь)
+                    print(f"  Не удалось удалить папку {root}: {e}")
+        if deleted_folders_count > 0:
+            print(f"Удалено пустых папок: {deleted_folders_count}")
+        else:
+            print("Пустых папок для удаления не найдено.")
+    except Exception as e: # Более общее исключение на случай непредвиденных ошибок с os.walk
+        print(f"Ошибка при попытке удаления пустых исходных папок: {e}")
+
 
     print("\n--------------------------------------")
     print("Перемещение завершено.")
@@ -474,6 +527,10 @@ if __name__ == "__main__":
     processing_group.add_argument("-s", "--speed", type=float, default=1.0, help="Коэффициент скорости (0.5-2.0). По умолчанию: 1.0.")
     processing_group.add_argument("--skip-existing", action='store_true', help="Пропускать обработку, если 1-й кусок уже есть.")
     processing_group.add_argument("--tts-progress", action='store_true', help="Вставлять голосовое сообщение о прогрессе в первый кусок каждого файла")
+    # Добавляем аргумент для уровня нормализации
+    processing_group.add_argument("--norm-dbfs", type=float, default=-0.1, help="Целевой уровень нормализации в dBFS (если включена). По умолчанию: -0.1.")
+    # Добавляем флаг для включения нормализации
+    processing_group.add_argument("--enable-normalization", action='store_true', help="Включить нормализацию громкости.")
 
     args = parser.parse_args()
 
@@ -598,7 +655,9 @@ if __name__ == "__main__":
                             search_window_s=args.window,
                             silence_thresh_db=args.threshold,
                             min_silence_len_ms=args.min_silence,
-                            speed_factor=args.speed
+                            speed_factor=args.speed,
+                            target_normalization_dbfs=args.norm_dbfs,
+                            enable_normalization=args.enable_normalization
                         )
                         processed_files += 1
                     except Exception as e:
@@ -614,7 +673,9 @@ if __name__ == "__main__":
                             search_window_s=args.window,
                             silence_thresh_db=args.threshold,
                             min_silence_len_ms=args.min_silence,
-                            speed_factor=args.speed
+                            speed_factor=args.speed,
+                            target_normalization_dbfs=args.norm_dbfs,
+                            enable_normalization=args.enable_normalization
                         )
                         processed_files += 1
                     except Exception as e:

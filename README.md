@@ -1,61 +1,64 @@
-# MP3 AutoCut — GUI и CLI-утилита для нарезки MP3
+# MP3 AutoCut — GUI and CLI Utility for Splitting MP3s
 
-MP3 AutoCut — это программа с удобным графическим интерфейсом (GUI), которая автоматически делит длинные MP3-файлы (например, аудиокниги, лекции, подкасты, диктофонные записи) на короткие удобные части. Она ищет естественные паузы (тишину) и режет аудио так, чтобы не обрывать фразы. Можно менять скорость воспроизведения, а готовые файлы легко скопировать на внешний диск — при этом сохраняется правильный порядок для прослушивания на наушниках Shokz. Особенно полезно для Shokz, где нельзя перематывать на 30-60 секунд: просто нарежь аудио на короткие файлы и переключайся между ними двойным или тройным нажатием на Shokz.
+MP3 AutoCut is a program with a user-friendly graphical interface (GUI) that automatically divides long MP3 files (e.g., audiobooks, lectures, podcasts, voice recordings) into short, convenient parts. It searches for natural pauses (silence) and cuts the audio to avoid interrupting phrases. You can change the playback speed, and the finished files can be easily copied to an external drive — maintaining the correct order for listening on Shokz headphones. This is especially useful for Shokz, where you can't rewind 30-60 seconds: just cut the audio into short files and switch between them with a double or triple press on your Shokz.
 
-Для продвинутых пользователей также доступен запуск через командную строку (CLI).
+For advanced users, command-line interface (CLI) operation is also available.
 
-**Рекомендуемый способ установки и запуска — через виртуальное окружение (venv).** Это обеспечит изоляцию зависимостей проекта и поможет избежать многих распространенных проблем.
+**The recommended way to install and run is through a virtual environment (venv).** This will ensure project dependency isolation and help avoid many common problems.
 
-## Графический интерфейс (GUI)
+## Graphical User Interface (GUI)
 
-Основной способ использования программы — через графический интерфейс. Файл: `mp3_autocut_gui.py`.
+The primary way to use the program is through the graphical interface. File: `mp3_autocut_gui.py`.
 
-### Возможности GUI:
-- Все параметры нарезки и копирования доступны через удобную форму
-- Можно сохранять и выбирать профили настроек (например, для разных сценариев)
-- Профили сохраняют все настроенные параметры.
-- Выбор папок через диалоговые окна
-- Копирование на внешний диск — опционально (чекбокс)
-- Логи выполнения отображаются в реальном времени
-- Кнопка остановки процесса
-- Всё работает локально, кроссплатформенно (Mac/Win/Linux)
+### GUI Features:
+- All splitting and copying parameters are available through a convenient form.
+- You can save and select setting profiles (e.g., for different scenarios).
+- Profiles save all configured parameters, including checkbox states and normalization settings.
+- Improved interface structure with grouped settings for better usability.
+- Folder selection via dialog boxes.
+- Copying to an external drive is optional (checkbox).
+- Execution logs are displayed in real-time.
+- Stop process button.
+- Ability to set a custom application icon (see below).
+- Everything works locally, cross-platform (Mac/Win/Linux).
 
-## Возможности (общие для GUI и CLI)
+## Features (Common to GUI and CLI)
 
-- Рекурсивный поиск и обработка всех MP3 в папке
-- Нарезка по тишине с гибкими параметрами
-- Изменение скорости воспроизведения (0.5–2.0, экспериментально до 10)
-- Копирование и перемещение файлов с проверкой целостности (SHA256)
-- Вставка голосового сообщения о прогрессе (TTS, Mac/Win/Linux)
-- Подробные логи работы
+- Recursive search and processing of all MP3s in a folder.
+- Silence-based splitting with flexible parameters.
+- Playback speed adjustment (0.5–2.0, experimentally up to 10).
+- Peak volume normalization: each audio chunk can be normalized so that its loudest peak reaches a specified dBFS level (e.g., -0.1 dBFS). This helps to even out volume without clipping. Normalization is optional and configurable.
+- File copying and moving with integrity check (SHA256).
+- Insertion of voice progress messages (TTS, Mac/Win/Linux).
+- Detailed operation logs.
 
-## Требования
+## Requirements
 
-- Python 3.6+ (рекомендуется 3.9+ для лучшей совместимости с зависимостями)
-- `ffmpeg` (должен быть в PATH)
+- Python 3.6+ (Python 3.9+ recommended for better compatibility with dependencies).
+- `ffmpeg` (must be in PATH).
 
-## Установка и первый запуск (Рекомендуемый способ — с venv)
+## Installation and First Run (Recommended method — with venv)
 
-1.  **Клонируйте репозиторий или скачайте файлы проекта.**
-    Если у вас установлен Git:
+1.  **Clone the repository or download the project files.**
+    If you have Git installed:
     ```bash
-    git clone https://github.com/YOUR_USERNAME/mp3-autocut-buddy.git # Замените на актуальный URL репозитория
+    git clone https://github.com/YOUR_USERNAME/mp3-autocut-buddy.git # Replace with the actual repository URL
     cd mp3-autocut-buddy
     ```
-    Или просто скачайте ZIP-архив и распакуйте его.
+    Or just download the ZIP archive and extract it.
 
-2.  **Установите `ffmpeg`:**
+2.  **Install `ffmpeg`:**
     -   macOS: `brew install ffmpeg`
     -   Ubuntu/Debian: `sudo apt update && sudo apt install ffmpeg`
-    -   Windows: Скачайте с [официального сайта ffmpeg](https://ffmpeg.org/download.html) и добавьте путь к папке `bin` (где находится `ffmpeg.exe`) в системную переменную PATH.
+    -   Windows: Download from the [official ffmpeg website](https://ffmpeg.org/download.html) and add the path to the `bin` folder (where `ffmpeg.exe` is located) to the system PATH variable.
 
-3.  **Создайте и активируйте виртуальное окружение (venv):**
-    Находясь в корневой папке проекта (например, `mp3-autocut-buddy`), выполните:
+3.  **Create and activate a virtual environment (venv):**
+    In the root folder of the project (e.g., `mp3-autocut-buddy`), execute:
     ```bash
     python3 -m venv .venv_mp3autocut
     ```
-    Эта команда создаст папку `.venv_mp3autocut` с изолированным окружением Python.
-    Активируйте его:
+    This command will create a `.venv_mp3autocut` folder with an isolated Python environment.
+    Activate it:
     -   macOS / Linux:
         ```bash
         source .venv_mp3autocut/bin/activate
@@ -68,180 +71,198 @@ MP3 AutoCut — это программа с удобным графически
         ```bash
         .venv_mp3autocut\Scripts\Activate.ps1
         ```
-    После активации, ваша командная строка должна измениться, указывая на активное окружение (например, `(.venv_mp3autocut) your-prompt$`).
+    After activation, your command line prompt should change, indicating the active environment (e.g., `(.venv_mp3autocut) your-prompt$`).
 
-4.  **Установите зависимости проекта:**
-    Когда виртуальное окружение активировано, установите все необходимые библиотеки:
+4.  **Install project dependencies:**
+    With the virtual environment activated, install all necessary libraries:
     ```bash
     python -m pip install -r requirements.txt
-   ```
-    Или просто `pip install -r requirements.txt`, если `pip` корректно связан с venv.
+    ```
+    Or simply `pip install -r requirements.txt` if `pip` is correctly associated with the venv.
 
-5.  **Запустите GUI:**
-    Убедитесь, что venv всё ещё активировано:
+5.  **Run the GUI:**
+    Make sure the venv is still activated:
     ```bash
     python mp3_autocut_gui.py
     ```
 
-## Пример типового сценария (с GUI и venv)
+## Typical Usage Scenario (with GUI and venv)
 
-1.  Выполните шаги из раздела "Установка и первый запуск".
-2.  Убедитесь, что ваше виртуальное окружение (`.venv_mp3autocut`) активировано.
-3.  Запустите GUI: `python mp3_autocut_gui.py`.
-4.  В интерфейсе выберите папку с исходными MP3 (`source_mp3` по умолчанию).
-5.  Настройте желаемые параметры нарезки (длительность куска, скорость и т.д.) или выберите сохранённый профиль.
-6.  Нажмите "Запустить".
-7.  Готовые куски будут в папке результатов (`ready_mp3` по умолчанию, структура папок сохраняется).
-8.  Если нужно, включите опцию "Копировать на внешний диск" и укажите путь. Файлы будут скопированы и затем перемещены из папки результатов в `copied_mp3`.
+1.  Follow the steps in the "Installation and First Run" section.
+2.  Ensure your virtual environment (`.venv_mp3autocut`) is activated.
+3.  Run the GUI: `python mp3_autocut_gui.py`.
+4.  In the interface, select the folder with the source MP3s (default is `source_mp3`).
+5.  Configure the desired splitting parameters (chunk duration, speed, etc.) or select a saved profile.
+6.  Click "Start."
+7.  The processed chunks will be in the results folder (default is `ready_mp3`, folder structure is preserved).
+8.  If needed, enable the "Copy to external drive" option and specify the path. Files will be copied and then moved from the results folder to `copied_mp3`.
 
-## Использование через командную строку (CLI)
+## Command-Line Interface (CLI) Usage
 
-Для тех, кто предпочитает командную строку или хочет автоматизировать процесс, доступен файл `split_mp3.py`. **Не забудьте активировать виртуальное окружение перед запуском!**
+For those who prefer the command line or want to automate the process, the `split_mp3.py` file is available. **Don't forget to activate the virtual environment before running!**
 
 ```bash
 source .venv_mp3autocut/bin/activate  # macOS/Linux
 # .venv_mp3autocut\Scripts\activate  # Windows
-python split_mp3.py [параметры]
+python split_mp3.py [parameters]
 ```
 
-### Базовая обработка (CLI)
+### Basic Processing (CLI)
 ```bash
 python split_mp3.py
 ```
-Обычная нарезка: всё по дефолту (source_mp3 → ready_mp3, 100 сек, скорость 1.0)
+Normal splitting: all defaults (source_mp3 → ready_mp3, 100 sec, speed 1.0).
 
-### Кастомные параметры (CLI):
+### Custom Parameters (CLI):
 ```bash
 python split_mp3.py -i my_mp3s -o out_mp3s -d 300 -w 8 -t -35 -m 700 -s 1.25
 ```
 
-### Только копирование и перемещение (CLI, без обработки):
+### Copy and Move Only (CLI, no processing):
 ```bash
 python split_mp3.py --copy-only --output-dir ready_mp3 --copy-to /Volumes/DRIVE
 ```
 
-### Все параметры CLI:
-- `-i, --input-dir` — папка с исходными MP3 (по умолчанию: source_mp3)
-- `-o, --output-dir` — папка для результатов (по умолчанию: ready_mp3)
-- `-d, --duration` — желаемая длительность куска, сек (по умолчанию: 100)
-- `-w, --window` — окно поиска тишины, сек (по умолчанию: 10)
-- `-t, --threshold` — порог тишины, dBFS (по умолчанию: -40)
-- `-m, --min-silence` — мин. длина тишины, мс (по умолчанию: 500, можно от 50)
-- `-s, --speed` — коэффициент скорости (по умолчанию: 1.0, диапазон 0.5–10.0)
-- `--skip-existing` — пропускать файлы, если уже есть результат
-- `--tts-progress` — вставлять голосовое сообщение о прогрессе (процент прослушанного и длительность книги; на Mac — голос Yuri, на Win/Linux — pyttsx3)
-- `--copy-only` — только копировать и перемещать, не обрабатывать
-- `--copy-to` — путь для копирования (требуется для --copy-only или для копирования после обработки в GUI/CLI)
+### All CLI Parameters:
+- `-i, --input-dir` — folder with source MP3s (default: source_mp3)
+- `-o, --output-dir` — folder for results (default: ready_mp3)
+- `-d, --duration` — desired chunk duration, sec (default: 100)
+- `-w, --window` — silence search window, sec (default: 10)
+- `-t, --threshold` — silence threshold, dBFS (default: -40)
+- `-m, --min-silence` — min. silence length, ms (default: 500, can be from 50)
+- `-s, --speed` — speed factor (default: 1.0, range 0.5–10.0)
+- `--skip-existing` — skip files if results already exist
+- `--tts-progress` — insert voice progress message (percentage listened and total book duration; on Mac — Yuri voice, on Win/Linux — pyttsx3)
+- `--copy-only` — only copy and move, do not process
+- `--copy-to` — path for copying (required for --copy-only or for copying after processing in GUI/CLI)
+- `--enable-normalization` — enable peak volume normalization.
+- `--norm-dbfs` — target peak level for normalization in dBFS (used if `--enable-normalization` is on). Default: -0.1.
 
-### Примеры команд CLI
+### CLI Command Examples
 
 ```bash
 python split_mp3.py
 ```
-Обычная нарезка: всё по дефолту (source_mp3 → ready_mp3, 100 сек, скорость 1.0)
+Normal splitting: all defaults (source_mp3 → ready_mp3, 100 sec, speed 1.0).
 
 ```bash
 python split_mp3.py -i audiobooks -o output -d 120 -w 10 -t -35 -m 1000
 ```
-Нарезать все mp3 из папки audiobooks на куски по 2 минуты, искать паузы длиной от 1000 мс (1 сек) с порогом -35 dBFS в окне 10 сек, результат в папке output.
+Split all mp3s from the `audiobooks` folder into 2-minute chunks, search for pauses of at least 1000 ms (1 sec) with a -35 dBFS threshold in a 10-sec window, results in the `output` folder.
 
 ```bash
 python split_mp3.py -s 1.5
 ```
-Ускорить все mp3 в 1.5 раза.
+Speed up all mp3s by 1.5 times.
 
 ```bash
 python split_mp3.py --skip-existing
 ```
-Пропускать файлы, если уже есть результат.
+Skip files if results already exist.
 
 ```bash
 python split_mp3.py --copy-only --output-dir ready_mp3 --copy-to /Volumes/USB
 ```
-Только скопировать все mp3 из папки ready_mp3 на внешний диск /Volumes/USB с проверкой целостности файлов (SHA256), затем переместить их в папку copied_mp3.
+Only copy all mp3s from the `ready_mp3` folder to the external drive `/Volumes/USB` with file integrity check (SHA256), then move them to the `copied_mp3` folder.
 
 ```bash
 python split_mp3.py -i lectures -o chunks -d 120 -w 5 -t -45 -m 300 -s 0.8
 ```
-Нарезать все mp3 из папки lectures на куски по 2 минуты, искать паузы длиной от 300 мс с порогом -45 dBFS в окне 5 сек, замедлить аудио до 0.8x, результат в папке chunks.
+Split all mp3s from the `lectures` folder into 2-minute chunks, search for pauses of at least 300 ms with a -45 dBFS threshold in a 5-sec window, slow down audio to 0.8x, results in the `chunks` folder.
 
 ```bash
 python split_mp3.py --tts-progress
 ```
-Вставить голосовое сообщение о прогрессе в начало первого куска каждого файла.
+Insert a voice progress message at the beginning of the first chunk of each file.
 
-## Примечания
-- Для корректной работы `ffmpeg` должен быть установлен и доступен в PATH.
-- Для TTS на Mac используется системный голос Yuri (команда `say`), на Windows/Linux — библиотека `pyttsx3` (устанавливается автоматически с зависимостями в venv).
-- Вся основная логика нарезки и обработки находится в `split_mp3.py`, который используется и GUI.
-- Все параметры CLI также можно посмотреть через `python split_mp3.py -h`.
+```bash
+python split_mp3.py --enable-normalization --norm-dbfs -0.5
+```
+Split files with default settings, enabling peak normalization to -0.5 dBFS.
 
-## Решение проблем (Troubleshooting)
+```bash
+python split_mp3.py -s 1.2 --enable-normalization
+```
+Speed up audio by 1.2 times and apply peak normalization with the default target level (-0.1 dBFS).
 
-**1. Ошибка `command not found: python`, `python3` или `pip`, `pip3`**
-   - **Симптом:** Терминал не распознает команды `python`, `python3`, `pip` или `pip3`.
-   - **Причина:**
-     - Python не установлен, или путь к нему не добавлен в системную переменную PATH.
-     - Вы находитесь не в активированном виртуальном окружении (venv), где эти команды доступны.
-   - **Решение:**
-     - **Рекомендуется использовать venv.** Убедитесь, что вы создали и активировали venv согласно разделу "Установка". В активированном venv команды `python` и `pip` должны работать и указывать на версии из venv.
-     - Если вы НЕ используете venv (не рекомендуется):
-       - Убедитесь, что Python 3.6+ установлен. Проверьте `python3 --version`. Если не установлен, скачайте с [официального сайта Python](https://www.python.org/downloads/) и при установке **обязательно отметьте опцию "Add Python to PATH"** или аналогичную.
-       - На macOS и Linux часто нужно использовать `python3` и `pip3`.
-       - Если `pip` или `pip3` не найдены, попробуйте: `python3 -m pip install --upgrade pip` для установки/обновления pip.
+## Setting a Custom Application Icon (for GUI)
 
-**2. Ошибка `ModuleNotFoundError: No module named 'PyQt5'` (или `pydub`, `pyttsx3`)**
-   - **Симптом:** При запуске скрипта (`mp3_autocut_gui.py` или `split_mp3.py`) возникает ошибка, что модуль не найден, например, `ModuleNotFoundError: No module named 'PyQt5'`.
-   - **Причина:** Необходимые библиотеки не установлены в текущем окружении Python (особенно если venv не активировано или зависимости не установлены в нем).
-   - **Решение:**
-     - Убедитесь, что ваше **виртуальное окружение (venv) активировано**.
-     - Находясь в активированном venv, установите все зависимости из файла `requirements.txt`:
+1.  Prepare an icon file. It is recommended to use `.png` format (e.g., `app_icon.png`)民主党 256x256 pixels or larger.
+2.  Place the icon file (named `app_icon.png`) in the same directory as the `mp3_autocut_gui.py` script.
+3.  The next time `mp3_autocut_gui.py` is launched, this icon will be used for the application window and in the Dock (on macOS).
+
+## Notes
+- For correct operation, `ffmpeg` must be installed and available in PATH.
+- For TTS on Mac, the system voice Yuri (command `say`) is used; on Windows/Linux, the `pyttsx3` library is used (installed automatically with dependencies in venv).
+- All main splitting and processing logic is in `split_mp3.py`, which is used by the GUI as well.
+- All CLI parameters can also be viewed via `python split_mp3.py -h`.
+
+## Troubleshooting
+
+**1. Error `command not found: python`, `python3` or `pip`, `pip3`**
+   - **Symptom:** The terminal does not recognize `python`, `python3`, `pip`, or `pip3` commands.
+   - **Cause:**
+     - Python is not installed, or its path is not added to the system PATH variable.
+     - You are not in an activated virtual environment (venv) where these commands are available.
+   - **Solution:**
+     - **Using venv is recommended.** Ensure you have created and activated a venv according to the "Installation" section. In an activated venv, `python` and `pip` commands should work and point to the versions from the venv.
+     - If you are NOT using venv (not recommended):
+       - Ensure Python 3.6+ is installed. Check `python3 --version`. If not installed, download from the [official Python website](https://www.python.org/downloads/) and **make sure to check the "Add Python to PATH" option** or similar during installation.
+       - On macOS and Linux, you often need to use `python3` and `pip3`.
+       - If `pip` or `pip3` are not found, try: `python3 -m pip install --upgrade pip` to install/upgrade pip.
+
+**2. Error `ModuleNotFoundError: No module named 'PyQt5'` (or `pydub`, `pyttsx3`)**
+   - **Symptom:** When running a script (`mp3_autocut_gui.py` or `split_mp3.py`), an error occurs stating that a module is not found, e.g., `ModuleNotFoundError: No module named 'PyQt5'`.
+   - **Cause:** Necessary libraries are not installed in the current Python environment (especially if venv is not activated or dependencies are not installed in it).
+   - **Solution:**
+     - Ensure your **virtual environment (venv) is activated**.
+     - While in an activated venv, install all dependencies from the `requirements.txt` file:
        ```bash
        python -m pip install -r requirements.txt
        ```
-     - Если ошибка сохраняется для конкретного модуля, попробуйте переустановить его явно (в активированном venv), например:
+     - If the error persists for a specific module, try reinstalling it explicitly (in an activated venv), e.g.:
        ```bash
        python -m pip uninstall PyQt5
        python -m pip install PyQt5
        ```
 
-**3. Ошибка `audioop` / `pydub` (особенно на macOS/старых Linux или со старыми версиями Python)**
-   - **Симптом:** Ошибки при импорте или работе `pydub`, часто с упоминанием `audioop`. Может проявляться даже при использовании venv, если оно создано на основе старой версии Python.
-   - **Причина:** Несовместимость старых версий Python (обычно до 3.8-3.9) с библиотекой `pydub`.
-   - **Решение:**
-     - **Обновите Python и venv:** Рекомендуется использовать Python 3.9+ (для macOS — Python 3.12 для наилучшей совместимости).
-     - Если у вас установлена подходящая версия Python, но venv было создано ранее со старой версией, или вы хотите быть уверены, что используется нужная версия Python для venv, создайте (или пересоздайте) виртуальное окружение, явно указав интерпретатор Python:
+**3. Error `audioop` / `pydub` (especially on macOS/older Linux or with older Python versions)**
+   - **Symptom:** Errors during import or operation of `pydub`, often mentioning `audioop`. May occur even when using venv if it was created based on an old Python version.
+   - **Cause:** Incompatibility of older Python versions (usually before 3.8-3.9) with the `pydub` library.
+   - **Solution:**
+     - **Update Python and venv:** It is recommended to use Python 3.9+ (for macOS — Python 3.12 for best compatibility).
+     - If you have a suitable Python version installed, but the venv was created earlier with an older version, or you want to ensure the correct Python version is used for the venv, create (or recreate) the virtual environment, explicitly specifying the Python interpreter:
        ```bash
-       # Пример для Python 3.12 (убедитесь, что python3.12 доступен)
+       # Example for Python 3.12 (ensure python3.12 is available)
        python3.12 -m venv .venv_mp3autocut_py312 
        source .venv_mp3autocut_py312/bin/activate
-       # Затем установите зависимости
+       # Then install dependencies
        python -m pip install -r requirements.txt
        ```
-       Замените `.venv_mp3autocut_py312` на желаемое имя папки venv и `python3.12` на вашу актуальную команду для запуска нужной версии Python (например, `python3.9`, `python3.10` и т.д.). Если вы не уверены, какая команда соответствует нужной версии, проверьте с помощью `python3.X --version`.
+       Replace `.venv_mp3autocut_py312` with the desired venv folder name and `python3.12` with your actual command for launching the required Python version (e.g., `python3.9`, `python3.10`, etc.). If you are unsure which command corresponds to the required version, check with `python3.X --version`.
 
-**4. `ffmpeg` не найден**
-   - **Симптом:** Сообщение "ffmpeg не найден или не доступен в PATH" при обработке файлов.
-   - **Решение:** Следуйте инструкциям по установке `ffmpeg` из раздела "Установка и первый запуск". После установки перезапустите терминал/GUI.
+**4. `ffmpeg` not found**
+   - **Symptom:** Message "ffmpeg not found or not available in PATH" during file processing.
+   - **Solution:** Follow the `ffmpeg` installation instructions in the "Installation and First Run" section. Restart the terminal/GUI after installation.
 
-**5. Проблемы с декодированием MP3 (`CouldntDecodeError`)**
-   - **Симптом:** Сообщение в логах "Ошибка: Не удалось декодировать файл..."
-   - **Решение:** Проверьте целостность MP3-файла, попробуйте открыть его в другом плеере.
+**5. Problems with MP3 decoding (`CouldntDecodeError`)**
+   - **Symptom:** Log message "Error: Could not decode file..."
+   - **Solution:** Check the integrity of the MP3 file, try opening it in another player.
 
-**6. Низкое качество звука при сильном изменении скорости**
-   - **Симптом:** Искажения звука при скорости > 2.0x или < 0.5x.
-   - **Решение:** Для лучшего качества используйте скорость в диапазоне 0.5x-2.0x.
+**6. Low sound quality with significant speed changes**
+   - **Symptom:** Sound distortions at speeds > 2.0x or < 0.5x.
+   - **Solution:** For best quality, use speeds in the 0.5x-2.0x range.
 
-**7. Проблемы с TTS (голосовыми оповещениями)**
-   - **Симптом:** Голосовые оповещения не работают, хотя опция включена.
-   - **Решение:**
-     - **macOS:** Проверьте работу команды `say "hello"` в терминале. Убедитесь, что голос `Yuri (Enhanced)` (или используемый по умолчанию) доступен.
-     - **Windows/Linux:** Убедитесь, что `pyttsx3` установлен в вашем venv. Проверьте наличие TTS-движков и голосов в операционной системе и их настройки.
+**7. Problems with TTS (voice notifications)**
+   - **Symptom:** Voice notifications do not work even though the option is enabled.
+   - **Solution:**
+     - **macOS:** Check the `say "hello"` command in the terminal. Ensure the `Yuri (Enhanced)` voice (or the default used) is available.
+     - **Windows/Linux:** Ensure `pyttsx3` is installed in your venv. Check for TTS engines and voices in the operating system and their settings.
 
-**8. "Зависание" при обработке большого количества файлов**
-   - **Симптом:** Программа долго не отвечает или не показывает прогресс.
-   - **Решение:** Наберитесь терпения, особенно для больших объемов или на медленных машинах. Следите за логами. Для теста попробуйте обработать меньший набор файлов.
+**8. "Freezing" when processing a large number of files**
+   - **Symptom:** The program does not respond for a long time or shows no progress.
+   - **Solution:** Be patient, especially with large volumes or on slower machines. Monitor the logs. For a test, try processing a smaller set of files.
 
-**9. Копирование на внешний диск не работает**
-    - **Симптом:** Ошибки при копировании, файлы не появляются на диске.
-    - **Решение:** Проверьте правильность пути к диску, его подключение, наличие свободного места и прав на запись.
+**9. Copying to external drive does not work**
+    - **Symptom:** Errors during copying, files do not appear on the drive.
+    - **Solution:** Check the correctness of the path to the drive, its connection, available free space, and write permissions. 
