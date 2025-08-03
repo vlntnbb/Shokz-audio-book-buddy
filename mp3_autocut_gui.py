@@ -29,22 +29,46 @@ DEFAULT_PROFILE = {
 class Worker(QtCore.QThread):
     log_signal = QtCore.pyqtSignal(str)
     finished_signal = QtCore.pyqtSignal()
+    progress_signal = QtCore.pyqtSignal(int)  # Новый сигнал для прогресса
 
     def __init__(self, cmd):
         super().__init__()
         self.cmd = cmd
         self.process = None
         self._stop_event = threading.Event()
+        self.total_files = 0
+        self.processed_files = 0
 
     def run(self):
+        # Сбрасываем счетчики при начале нового процесса
+        self.total_files = 0
+        self.processed_files = 0
+        
         try:
             self.process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         except Exception as e:
             self.log_signal.emit(f'Ошибка запуска: {e}')
             self.finished_signal.emit()
             return
+        
+        import re
         for line in self.process.stdout:
             self.log_signal.emit(line)
+            
+            # Отслеживаем количество найденных файлов
+            if "Найдено" in line and "MP3 файлов для обработки" in line:
+                match = re.search(r'Найдено (\d+) MP3 файлов', line)
+                if match:
+                    self.total_files = int(match.group(1))
+                    self.progress_signal.emit(0)  # Сбрасываем прогресс в 0
+                    
+            # Отслеживаем завершение обработки файлов
+            elif "--- Обработка файла" in line and "завершена ---" in line:
+                self.processed_files += 1
+                if self.total_files > 0:
+                    progress = int((self.processed_files / self.total_files) * 100)
+                    self.progress_signal.emit(progress)
+            
             if self._stop_event.is_set():
                 self.process.terminate()
                 break
@@ -60,7 +84,7 @@ class MainWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MP3 AutoCut GUI")
-        self.setGeometry(100, 100, 800, 800)
+        self.setGeometry(100, 100, 800, 750)  # Оптимальная высота для большинства экранов
         
         # Устанавливаем иконку приложения
         icon = QIcon(icon_path)
@@ -183,6 +207,11 @@ class MainWindow(QtWidgets.QWidget):
         self.tts_progress = QtWidgets.QCheckBox("Вставлять голосовое сообщение о прогрессе")
         self.tts_progress.setToolTip("В начало первого куска каждого файла будет вставлено голосовое сообщение: процент прослушанной книги и общая длительность. На Mac используется голос Yuri, на Win/Linux — pyttsx3.")
         audio_layout.addRow(self.tts_progress) # Добавляем как новую строку в QFormLayout
+        
+        # Новый чекбокс для режима сетки TTS
+        self.tts_progress_grid = QtWidgets.QCheckBox("Сообщение о прогрессе не чаще чем каждые 5%")
+        self.tts_progress_grid.setToolTip("Если включено — голосовые сообщения о прогрессе будут вставляться не чаще чем каждые 5% (в точках 5%, 10%, 15%, 20% и т.д.). Первое сообщение появится только после 5% прогресса.")
+        audio_layout.addRow(self.tts_progress_grid)
 
         processing_groups_layout.addWidget(self.audio_processing_group)
 
@@ -191,71 +220,47 @@ class MainWindow(QtWidgets.QWidget):
         # --- Группа: Операции с файлами и опции ---
         self.file_ops_group = QtWidgets.QGroupBox("Операции с файлами и опции")
         file_ops_layout = QtWidgets.QVBoxLayout(self.file_ops_group)
-        file_ops_layout.setSpacing(8) # Немного увеличим вертикальный интервал между опциями
+        file_ops_layout.setContentsMargins(10, 10, 10, 5)  # Уменьшаем нижний отступ
+        file_ops_layout.setSpacing(4)  # Уменьшаем интервал между опциями
 
-        # Чекбокс "Пропускать уже обработанные" в своем QHBoxLayout для выравнивания
+        # Чекбокс "Пропускать уже обработанные"
         self.skip_existing = QtWidgets.QCheckBox("Пропускать уже обработанные")
         self.skip_existing.setToolTip("Если включено — файлы, для которых уже есть первый кусок в папке назначения, будут пропущены. Ускоряет повторную обработку.")
-        skip_existing_h_layout = QtWidgets.QHBoxLayout()
-        skip_existing_h_layout.addWidget(self.skip_existing)
-        skip_existing_h_layout.addStretch(1)
-        file_ops_layout.addLayout(skip_existing_h_layout)
+        file_ops_layout.addWidget(self.skip_existing)
         
-        # Чекбокс "Только копировать/перемещать" в своем QHBoxLayout для выравнивания
+        # Чекбокс "Только копировать/перемещать"
         self.copy_only = QtWidgets.QCheckBox("Только копировать/перемещать (без обработки)")
         self.copy_only.setToolTip("В этом режиме нарезка не выполняется, а только копирование/перемещение файлов из папки результатов на внешний диск и/или в папку copied_mp3.")
         self.copy_only.stateChanged.connect(self.toggle_processing_fields)
-        copy_only_h_layout = QtWidgets.QHBoxLayout()
-        copy_only_h_layout.addWidget(self.copy_only)
-        copy_only_h_layout.addStretch(1)
-        file_ops_layout.addLayout(copy_only_h_layout)
+        file_ops_layout.addWidget(self.copy_only)
 
-        # Создаем горизонтальный layout для чекбокса "Копировать на внешний диск" и элементов выбора пути
-        copy_to_combined_layout = QtWidgets.QHBoxLayout()
-
+        # Компактный layout для копирования на внешний диск
+        copy_to_layout = QtWidgets.QVBoxLayout()
+        copy_to_layout.setSpacing(2)
+        
         self.copy_to_enabled = QtWidgets.QCheckBox("Копировать на внешний диск (copy-to)")
         self.copy_to_enabled.setToolTip("Если включено — после обработки все файлы будут скопированы на указанный внешний диск или папку (например, /Volumes/SHOKZ). После копирования исходные файлы могут быть перемещены в папку copied_mp3.")
         self.copy_to_enabled.stateChanged.connect(self.toggle_copy_to_visibility)
-        copy_to_combined_layout.addWidget(self.copy_to_enabled)
+        copy_to_layout.addWidget(self.copy_to_enabled)
 
-        # --- Используем QStackedWidget для поля ввода пути и кнопки ---
-        self.copy_to_stacked_widget = QtWidgets.QStackedWidget()
-
-        # Страница 1: Пустой виджет (когда поле ввода скрыто)
-        self.copy_to_empty_page_widget = QtWidgets.QWidget()
-        # Можно добавить layout с минимальным размером или spacer, если нужно зарезервировать место
-        # но QStackedWidget должен сам справиться, взяв размер большей страницы.
-
-        # Страница 2: Поле ввода и кнопка
-        self.copy_to_path_page_widget = QtWidgets.QWidget()
-        copy_to_path_page_layout = QtWidgets.QHBoxLayout(self.copy_to_path_page_widget)
-        copy_to_path_page_layout.setContentsMargins(0,0,0,0) # Убираем лишние отступы
-        copy_to_path_page_layout.setSpacing(6) # Стандартный спейсинг между виджетами
-
+        # Поле ввода пути для copy-to
+        copy_to_path_layout = QtWidgets.QHBoxLayout()
+        copy_to_path_layout.setContentsMargins(20, 0, 0, 0)  # Отступ слева для визуальной связи с чекбоксом
+        
         self.copy_to = QtWidgets.QLineEdit()
         self.copy_to.setToolTip("Путь к папке/диску для копирования результата. Например: /Volumes/SHOKZ или D:/AUDIOBOOKS. Обязательно для режима копирования.")
-        copy_to_path_page_layout.addWidget(self.copy_to)
+        copy_to_path_layout.addWidget(self.copy_to)
 
         self.copy_to_btn = QtWidgets.QPushButton("...")
         self.copy_to_btn.setFixedWidth(30)
         self.copy_to_btn.clicked.connect(self.select_copy_to_dir)
-        copy_to_path_page_layout.addWidget(self.copy_to_btn)
+        copy_to_path_layout.addWidget(self.copy_to_btn)
         
-        # Устанавливаем минимальный размер для пустой страницы такой же, как у страницы с элементами,
-        # чтобы QStackedWidget не менял размер при переключении.
-        path_page_actual_min_size = self.copy_to_path_page_widget.sizeHint() # или minimumSizeHint()
-        self.copy_to_empty_page_widget.setMinimumSize(path_page_actual_min_size)
-
-        self.copy_to_stacked_widget.addWidget(self.copy_to_empty_page_widget) # index 0
-        self.copy_to_stacked_widget.addWidget(self.copy_to_path_page_widget)  # index 1
-        # ---------------------------------------------------------------------
-
-        # self.copy_to_path_widget.setLayout(copy_to_path_h_layout) # Старый контейнер больше не нужен в таком виде
+        copy_to_layout.addLayout(copy_to_path_layout)
+        file_ops_layout.addLayout(copy_to_layout)
         
-        copy_to_combined_layout.addWidget(self.copy_to_stacked_widget) # Добавляем QStackedWidget в общий горизонтальный layout
-        copy_to_combined_layout.addStretch(1)
-
-        file_ops_layout.addLayout(copy_to_combined_layout)
+        # Устанавливаем максимальную высоту для группы чтобы не растягивалась
+        self.file_ops_group.setMaximumHeight(120)
         main_layout.addWidget(self.file_ops_group)
         
         # Кнопки
@@ -267,10 +272,24 @@ class MainWindow(QtWidgets.QWidget):
         btn_layout.addWidget(self.stop_btn)
         main_layout.addLayout(btn_layout)
 
+        # Прогресс бар
+        progress_layout = QtWidgets.QVBoxLayout()
+        progress_label = QtWidgets.QLabel("Прогресс обработки:")
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("%v% (%p%)")  # Показывает и текущее значение и процент
+        progress_layout.addWidget(progress_label)
+        progress_layout.addWidget(self.progress_bar)
+        main_layout.addLayout(progress_layout)
+
         # Окно логов
         self.log_area = QtWidgets.QPlainTextEdit()
         self.log_area.setReadOnly(True)
-        main_layout.addWidget(self.log_area)
+        self.log_area.setMinimumHeight(200)  # Уменьшаем минимальную высоту
+        main_layout.addWidget(self.log_area, 1)  # Добавляем stretch factor = 1, чтобы заняло всё доступное место
         self.setLayout(main_layout)
 
         # Сигналы
@@ -283,13 +302,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def toggle_copy_to_visibility(self):
         is_checked = self.copy_to_enabled.isChecked()
-
-        if is_checked:
-            self.copy_to_stacked_widget.setCurrentWidget(self.copy_to_path_page_widget)
-        else:
-            self.copy_to_stacked_widget.setCurrentWidget(self.copy_to_empty_page_widget)
-        
-        # Управляем активностью поля и кнопки независимо от видимости страниц (для надежности)
+        # Просто управляем активностью поля и кнопки
         self.copy_to.setEnabled(is_checked) 
         self.copy_to_btn.setEnabled(is_checked)
 
@@ -308,6 +321,7 @@ class MainWindow(QtWidgets.QWidget):
         self.copy_to.setText(p.get("copy_to", ""))
         self.copy_to_enabled.setChecked(p.get("copy_to_enabled", False))
         self.tts_progress.setChecked(p.get("tts_progress", False))
+        self.tts_progress_grid.setChecked(p.get("tts_progress_grid", False))
         self.skip_existing.setChecked(p.get("skip_existing", False))
         self.copy_only.setChecked(p.get("copy_only", DEFAULT_PROFILE.get("copy_only", False)))
         self.toggle_processing_fields(None)
@@ -337,6 +351,7 @@ class MainWindow(QtWidgets.QWidget):
                 "copy_to": self.copy_to.text(),
                 "copy_to_enabled": self.copy_to_enabled.isChecked(),
                 "tts_progress": self.tts_progress.isChecked(),
+                "tts_progress_grid": self.tts_progress_grid.isChecked(),
                 "norm_dbfs": self.norm_dbfs.value(),
                 "enable_normalization": self.enable_normalization_checkbox.isChecked(),
                 "skip_existing": self.skip_existing.isChecked(),
@@ -377,6 +392,8 @@ class MainWindow(QtWidgets.QWidget):
             cmd += ["--copy-to", self.copy_to.text()]
         if self.tts_progress.isChecked():
             cmd.append("--tts-progress")
+        if self.tts_progress_grid.isChecked():
+            cmd.append("--tts-progress-grid")
         if not self.copy_only.isChecked():
             cmd += [
                 "-d", str(self.duration.value()),
@@ -395,11 +412,13 @@ class MainWindow(QtWidgets.QWidget):
 
     def start_process(self):
         self.log_area.clear()
+        self.progress_bar.setValue(0)  # Сбрасываем прогресс бар
         cmd = self.build_cmd()
         self.append_log(f'Запуск: {" ".join(cmd)}')
         self.worker = Worker(cmd)
         self.worker.log_signal.connect(self.append_log)
         self.worker.finished_signal.connect(self.on_finished)
+        self.worker.progress_signal.connect(self.update_progress)  # Подключаем сигнал прогресса
         self.worker.start()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
@@ -415,9 +434,14 @@ class MainWindow(QtWidgets.QWidget):
             ts = datetime.datetime.now().strftime('%H:%M:%S')
             self.log_area.appendPlainText(f'[{ts}] {line}')
 
+    def update_progress(self, value):
+        """Обновляет прогресс бар"""
+        self.progress_bar.setValue(value)
+
     def on_finished(self):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.progress_bar.setValue(100)  # Завершаем прогресс на 100%
         self.append_log("\n=== Готово ===\n")
 
     def select_input_dir(self):
@@ -440,6 +464,7 @@ class MainWindow(QtWidgets.QWidget):
         self.cutting_params_group.setEnabled(enabled)
         self.audio_processing_group.setEnabled(enabled)
         self.tts_progress.setEnabled(enabled)
+        self.tts_progress_grid.setEnabled(enabled)
         self.skip_existing.setEnabled(enabled)
         if enabled:
             self.toggle_norm_dbfs_field()

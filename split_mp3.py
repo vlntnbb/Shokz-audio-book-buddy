@@ -94,10 +94,11 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
     """
     Разделяет ОДИН MP3 файл на части по ~target_chunk_duration_s, стараясь резать по тишине.
     Сохраняет части в указанную output_dir, опционально изменяя скорость и нормализуя громкость.
+    Возвращает словарь со статистикой обработки или None при ошибке.
     """
     if not os.path.exists(input_file):
         print(f"Ошибка: Файл не найден - {input_file}")
-        return
+        return None
 
     # Validate speed factor
     if not (0.5 <= speed_factor <= 10.0): # Allow up to 10x, but atempo works best 0.5-2.0, chaining needed > 2.0
@@ -107,28 +108,48 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
          # We'll try passing it directly, ffmpeg might handle simple cases > 2.0 or fail.
          if speed_factor <= 0:
              print(f"Ошибка: Коэффициент скорости должен быть положительным.")
-             return
+             return None
 
 
-    print(f"--- Обработка файла: {input_file} (Скорость: {speed_factor}x) ---")
+    print(f"🎵 --- Обработка файла: {input_file} (Скорость: {speed_factor}x) ---")
     print(f"  Загрузка...")
     try:
         audio = AudioSegment.from_mp3(input_file)
     except CouldntDecodeError: # More specific error catch
          print(f"  Ошибка: Не удалось декодировать файл: {input_file}. Возможно, он поврежден или не является MP3.")
-         return
+         return None
     except FileNotFoundError: # Handle case where file disappears between check and load
         print(f"  Ошибка: Файл не найден при попытке загрузки: {input_file}")
-        return
+        return None
     except Exception as e:
         print(f"  Ошибка загрузки MP3 файла ({input_file}): {e}")
         print("  Убедись, что ffmpeg или libav установлены и доступны в PATH.")
-        return
+        return None
 
     print(f"  Файл загружен (длительность: {len(audio)/1000:.2f}s).")
     total_duration_ms = len(audio)
     target_chunk_duration_ms = target_chunk_duration_s * 1000
     search_window_ms = search_window_s * 1000
+    
+    # Инициализация статистики
+    import time
+    start_time = time.time()
+    original_rms = audio.dBFS
+    original_peak = audio.max_dBFS
+    
+    stats = {
+        'original_duration_ms': total_duration_ms,
+        'target_duration_ms': total_duration_ms / speed_factor,  # После ускорения
+        'original_rms': original_rms,
+        'original_peak': original_peak,
+        'chunks_count': 0,
+        'total_output_size_bytes': 0,
+        'rms_values': [],
+        'peak_values': [],
+        'speed_factor': speed_factor,
+        'enable_normalization': enable_normalization,
+        'processing_time_sec': 0
+    }
 
     if not os.path.exists(output_dir):
         # print(f"  Создание выходной директории для кусков: {output_dir}")
@@ -136,7 +157,7 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
              os.makedirs(output_dir)
         except OSError as e:
              print(f"  Ошибка создания директории {output_dir}: {e}")
-             return
+             return None
 
 
     base_filename = os.path.splitext(os.path.basename(input_file))[0]
@@ -248,6 +269,21 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
                 # Use parameters for ffmpeg filters/options
                 # Экспортируем нужный чанк (оригинальный или нормализованный)
                 current_chunk_to_export.export(output_filename, format="mp3", parameters=export_params.get("parameters"))
+                
+                # Собираем статистику
+                stats['chunks_count'] += 1
+                try:
+                    file_size = os.path.getsize(output_filename)
+                    stats['total_output_size_bytes'] += file_size
+                except:
+                    pass
+                
+                # Собираем данные о громкости финального куска
+                final_rms = current_chunk_to_export.dBFS
+                final_peak = current_chunk_to_export.max_dBFS
+                stats['rms_values'].append(final_rms)
+                stats['peak_values'].append(final_peak)
+                
             except Exception as e:
                 print(f"  Ошибка экспорта куска {chunk_index} ({output_filename}): {e}")
         else:
@@ -262,8 +298,21 @@ def split_mp3(input_file, output_dir, target_chunk_duration_s=100, search_window
     if iterations >= max_iterations:
         print(f"  Предупреждение: Достигнут лимит итераций ({max_iterations}) для файла {input_file}. Возможно, зацикливание или ошибка в логике.")
 
+    # Завершаем сбор статистики
+    stats['processing_time_sec'] = time.time() - start_time
+    
+    # Вычисляем средние значения громкости
+    if stats['rms_values']:
+        stats['avg_final_rms'] = sum(stats['rms_values']) / len(stats['rms_values'])
+        stats['avg_final_peak'] = sum(stats['peak_values']) / len(stats['peak_values'])
+    else:
+        stats['avg_final_rms'] = 0
+        stats['avg_final_peak'] = 0
 
     print(f"--- Обработка файла {input_file} завершена ---")
+    print("═══════════════════════════════════════════════════════════")
+    
+    return stats
 
 
 def calculate_sha256(filepath):
@@ -472,10 +521,26 @@ def move_files_structure(source_root, move_dest_root):
 def get_total_and_cumulative_durations(mp3_files):
     total = 0
     cumulative = [0]
-    for f in mp3_files:
-        dur = len(AudioSegment.from_mp3(f))
-        total += dur
-        cumulative.append(total)
+    total_files = len(mp3_files)
+    
+    if total_files == 0:
+        return total, cumulative[:-1]
+    
+    print(f"Анализ длительностей {total_files} MP3 файлов...")
+    
+    for i, f in enumerate(mp3_files):
+        print(f"  [{i+1}/{total_files}] Анализ: {os.path.basename(f)}")
+        try:
+            dur = len(AudioSegment.from_mp3(f))
+            total += dur
+            cumulative.append(total)
+        except Exception as e:
+            print(f"    Ошибка при анализе файла {f}: {e}")
+            cumulative.append(total)  # добавляем текущий total без изменений
+    
+    hours, minutes = format_time(total)
+    print(f"Анализ завершен. Общая длительность: {hours}ч {minutes}м")
+    
     return total, cumulative[:-1]  # cumulative[i] — сумма до i-го файла
 
 def tts_to_wav(text, lang='ru'):
@@ -503,7 +568,136 @@ def format_time(ms):
     m = (s % 3600) // 60
     return h, m
 
+def format_size(bytes_size):
+    """Форматирует размер в байтах в человекочитаемый формат."""
+    for unit in ['Б', 'КБ', 'МБ', 'ГБ']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f} ТБ"
+
+def print_processing_statistics(all_stats, total_original_duration, total_target_duration, 
+                                total_chunks, total_output_size, total_processing_time, 
+                                processed_files, speed_factor, normalization_enabled):
+    """Выводит подробную статистику обработки."""
+    print("\n" + "="*70)
+    print("📊 ПОДРОБНАЯ СТАТИСТИКА ОБРАБОТКИ")
+    print("="*70)
+    
+    # Временные характеристики
+    orig_h, orig_m = format_time(total_original_duration)
+    target_h, target_m = format_time(total_target_duration)
+    
+    print(f"🕒 Временные характеристики:")
+    print(f"   Исходная длительность:  {orig_h}ч {orig_m}м ({total_original_duration/1000:.1f}с)")
+    print(f"   Итоговая длительность:   {target_h}ч {target_m}м ({total_target_duration/1000:.1f}с)")
+    if speed_factor != 1.0:
+        time_saved = total_original_duration - total_target_duration
+        time_saved_h, time_saved_m = format_time(time_saved)
+        print(f"   Экономия времени:        {time_saved_h}ч {time_saved_m}м ({speed_factor:.2f}x ускорение)")
+    
+    # Файловые характеристики
+    print(f"\n📁 Файловые характеристики:")
+    print(f"   Обработано файлов:       {processed_files}")
+    print(f"   Создано кусков:          {total_chunks}")
+    print(f"   Общий размер результата: {format_size(total_output_size)}")
+    if processed_files > 0:
+        print(f"   Среднее кусков на файл:  {total_chunks / processed_files:.1f}")
+        print(f"   Средний размер куска:    {format_size(total_output_size / total_chunks) if total_chunks > 0 else '0 Б'}")
+    
+    # Аудио характеристики
+    if all_stats:
+        original_rms_values = []
+        original_peak_values = []
+        final_rms_values = []
+        final_peak_values = []
+        
+        for stat in all_stats:
+            if stat['original_rms'] and stat['original_rms'] != float('-inf'):
+                original_rms_values.append(stat['original_rms'])
+            if stat['original_peak'] and stat['original_peak'] != float('-inf'):
+                original_peak_values.append(stat['original_peak'])
+            if stat['rms_values']:
+                final_rms_values.extend([rms for rms in stat['rms_values'] if rms != float('-inf')])
+            if stat['peak_values']:
+                final_peak_values.extend([peak for peak in stat['peak_values'] if peak != float('-inf')])
+        
+        print(f"\n🔊 Аудио характеристики:")
+        if original_rms_values:
+            avg_orig_rms = sum(original_rms_values) / len(original_rms_values)
+            print(f"   Исходный средний RMS:    {avg_orig_rms:.1f} dBFS")
+        if original_peak_values:
+            avg_orig_peak = sum(original_peak_values) / len(original_peak_values)
+            print(f"   Исходный средний пик:    {avg_orig_peak:.1f} dBFS")
+        
+        if final_rms_values:
+            avg_final_rms = sum(final_rms_values) / len(final_rms_values)
+            print(f"   Итоговый средний RMS:    {avg_final_rms:.1f} dBFS")
+        if final_peak_values:
+            avg_final_peak = sum(final_peak_values) / len(final_peak_values)
+            print(f"   Итоговый средний пик:    {avg_final_peak:.1f} dBFS")
+        
+        if normalization_enabled and original_rms_values and final_rms_values:
+            rms_change = avg_final_rms - avg_orig_rms
+            print(f"   Изменение RMS:           {rms_change:+.1f} dBFS")
+    
+    # Производительность
+    print(f"\n⚡ Производительность:")
+    print(f"   Время обработки:         {total_processing_time:.1f} сек")
+    if processed_files > 0:
+        print(f"   Время на файл:           {total_processing_time / processed_files:.1f} сек/файл")
+    if total_original_duration > 0:
+        speed_ratio = (total_original_duration / 1000) / total_processing_time
+        print(f"   Скорость обработки:      {speed_ratio:.1f}x от реального времени")
+    
+    print("="*70)
+
+def plural_ru(n, form1, form2, form5):
+    """Склоняет русское существительное по числу: 1, 2-4, 5+ (например, процент/процента/процентов)."""
+    n = abs(n) % 100
+    n1 = n % 10
+    if 10 < n < 20:
+        return form5
+    if n1 == 1:
+        return form1
+    if 2 <= n1 <= 4:
+        return form2
+    return form5
+
 if __name__ == "__main__":
+    import sys
+    if '--test-plural' in sys.argv:
+        print('Тесты для plural_ru:')
+        test_cases = [
+            (1, 'процент', 'процента', 'процентов', 'процент'),
+            (2, 'процент', 'процента', 'процентов', 'процента'),
+            (5, 'процент', 'процента', 'процентов', 'процентов'),
+            (11, 'процент', 'процента', 'процентов', 'процентов'),
+            (21, 'процент', 'процента', 'процентов', 'процент'),
+            (22, 'процент', 'процента', 'процентов', 'процента'),
+            (25, 'процент', 'процента', 'процентов', 'процентов'),
+            (101, 'процент', 'процента', 'процентов', 'процент'),
+            (0, 'процент', 'процента', 'процентов', 'процентов'),
+            (-1, 'процент', 'процента', 'процентов', 'процент'),
+            (112, 'процент', 'процента', 'процентов', 'процентов'),
+            (4, 'минута', 'минуты', 'минут', 'минуты'),
+            (14, 'минута', 'минуты', 'минут', 'минут'),
+            (23, 'час', 'часа', 'часов', 'часа'),
+            (1004, 'час', 'часа', 'часов', 'часа'),
+        ]
+        errors = 0
+        for n, f1, f2, f5, expected in test_cases:
+            result = plural_ru(n, f1, f2, f5)
+            ok = '✅' if result == expected else '❌'
+            if result != expected:
+                errors += 1
+            print(f'{ok} {n} → {result} (ожидалось: {expected})')
+        if errors == 0:
+            print('Все тесты пройдены успешно!')
+        else:
+            print(f'Ошибок: {errors}')
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(
         description="Рекурсивно ищет MP3, разделяет, изменяет скорость, копирует и перемещает результат.",
         formatter_class=argparse.RawTextHelpFormatter
@@ -527,6 +721,7 @@ if __name__ == "__main__":
     processing_group.add_argument("-s", "--speed", type=float, default=1.0, help="Коэффициент скорости (0.5-2.0). По умолчанию: 1.0.")
     processing_group.add_argument("--skip-existing", action='store_true', help="Пропускать обработку, если 1-й кусок уже есть.")
     processing_group.add_argument("--tts-progress", action='store_true', help="Вставлять голосовое сообщение о прогрессе в первый кусок каждого файла")
+    processing_group.add_argument("--tts-progress-grid", action='store_true', help="Сообщение о прогрессе не чаще чем каждые 5%%")
     # Добавляем аргумент для уровня нормализации
     processing_group.add_argument("--norm-dbfs", type=float, default=-0.1, help="Целевой уровень нормализации в dBFS (если включена). По умолчанию: -0.1.")
     # Добавляем флаг для включения нормализации
@@ -590,7 +785,8 @@ if __name__ == "__main__":
         processed_files = 0
         error_files = 0
 
-        # --- Новый блок: вычисляем длительности ---
+        # --- Сканирование MP3 файлов ---
+        print("Сканирование MP3 файлов в директории...")
         import glob
         all_mp3 = []
         for root, dirs, files in os.walk(input_root_dir):
@@ -599,9 +795,28 @@ if __name__ == "__main__":
                 if f.lower().endswith('.mp3'):
                     all_mp3.append(os.path.join(root, f))
         all_mp3.sort()  # сортировка по имени
-        total_dur, cumulative_durs = get_total_and_cumulative_durations(all_mp3)
+        print(f"Найдено {len(all_mp3)} MP3 файлов для обработки")
+        
+        # --- Вычисляем длительности для TTS progress (если включен) ---
+        if args.tts_progress:
+            total_dur, cumulative_durs = get_total_and_cumulative_durations(all_mp3)
+        else:
+            total_dur, cumulative_durs = 0, [0] * len(all_mp3)
+        
+        # Переменная для отслеживания последнего процента с TTS сообщением (для режима grid)
+        last_tts_progress_grid = -1
+        
+        # Инициализация общей статистики
+        import time
+        total_start_time = time.time()
+        all_stats = []
+        total_original_duration = 0
+        total_target_duration = 0
+        total_chunks = 0
+        total_output_size = 0
 
-        # --- Рекурсивный обход и обработка --- 
+        # --- Рекурсивный обход и обработка ---
+        print(f"\nНачало обработки файлов...") 
         for idx, (root, dirs, files) in enumerate(os.walk(input_root_dir)):
             files.sort()
             mp3_files = [f for f in files if f.lower().endswith('.mp3')]
@@ -631,24 +846,53 @@ if __name__ == "__main__":
                     except ValueError:
                         file_idx_in_all = 0
                     percent = int(round(100 * cumulative_durs[file_idx_in_all] / total_dur)) if total_dur > 0 else 0
-                    h, m = format_time(total_dur)
-                    tts_text = f"вы прослушали {percent} процентов книги длительностью {h} часов {m} минут"
-                    tts_wav = tts_to_wav(tts_text)
+                    
+                    # Проверяем, нужно ли вставлять TTS сообщение
+                    should_insert_tts = True
+                    if args.tts_progress_grid:
+                        # Режим grid: вставляем только если прогресс >= 5% и не было сообщения в текущем 5% диапазоне
+                        if percent < 5:
+                            should_insert_tts = False
+                        else:
+                            current_grid_position = (percent // 5) * 5  # 5, 10, 15, 20, ...
+                            if current_grid_position <= last_tts_progress_grid:
+                                should_insert_tts = False
+                            else:
+                                last_tts_progress_grid = current_grid_position
+                    
+                    if should_insert_tts:
+                        h, m = format_time(total_dur)
+                        percent_word = plural_ru(percent, 'процент', 'процента', 'процентов')
+                        hour_word = plural_ru(h, 'час', 'часа', 'часов')
+                        minute_word = plural_ru(m, 'минута', 'минуты', 'минут')
+                        tts_text = f"вы прослушали {percent} {percent_word} книги длительностью {h} {hour_word} {m} {minute_word}"
+                        print(f"  📢 Генерация TTS сообщения: \"{tts_text}\"")
+                        tts_wav = tts_to_wav(tts_text)
+                        print(f"  ✅ TTS сообщение готово, будет добавлено в первый кусок")
+                    else:
+                        tts_wav = None
+                        if args.tts_progress_grid:
+                            print(f"  ⏭️  TTS сообщение пропущено для {percent}% (режим grid: не чаще каждых 5%)")
+                        else:
+                            print(f"  ⏭️  TTS сообщение пропущено для {percent}%")
                     # --- нарезка ---
                     def split_mp3_with_tts(input_file, output_dir, *args_, **kwargs_):
                         from pydub import AudioSegment
                         chunks = []
                         audio = AudioSegment.from_mp3(input_file)
-                        split_mp3(input_file, output_dir, *args_, **kwargs_)
+                        file_stats = split_mp3(input_file, output_dir, *args_, **kwargs_)
                         first_chunk = os.path.join(output_dir, f"{base_output_name}_001.mp3")
-                        if os.path.exists(first_chunk):
+                        if os.path.exists(first_chunk) and tts_wav:
+                            print(f"  🔊 Добавление TTS сообщения в начало первого куска: {os.path.basename(first_chunk)}")
                             seg1 = AudioSegment.from_wav(tts_wav)
                             seg2 = AudioSegment.from_mp3(first_chunk)
                             combined = seg1 + seg2
                             combined.export(first_chunk, format="mp3")
                             os.remove(tts_wav)
+                            print(f"  🎯 TTS сообщение успешно добавлено в файл")
+                        return file_stats
                     try:
-                        split_mp3_with_tts(
+                        file_stats = split_mp3_with_tts(
                             input_file_path,
                             current_output_dir,
                             target_chunk_duration_s=args.duration,
@@ -659,6 +903,12 @@ if __name__ == "__main__":
                             target_normalization_dbfs=args.norm_dbfs,
                             enable_normalization=args.enable_normalization
                         )
+                        if file_stats:
+                            all_stats.append(file_stats)
+                            total_original_duration += file_stats['original_duration_ms']
+                            total_target_duration += file_stats['target_duration_ms']
+                            total_chunks += file_stats['chunks_count']
+                            total_output_size += file_stats['total_output_size_bytes']
                         processed_files += 1
                     except Exception as e:
                         print(f"\n!!! КРИТИЧЕСКАЯ ОШИБКА при обработке файла {input_file_path}: {e}")
@@ -666,7 +916,7 @@ if __name__ == "__main__":
                         error_files += 1
                 else:
                     try:
-                        split_mp3(
+                        file_stats = split_mp3(
                             input_file_path,
                             current_output_dir,
                             target_chunk_duration_s=args.duration,
@@ -677,13 +927,21 @@ if __name__ == "__main__":
                             target_normalization_dbfs=args.norm_dbfs,
                             enable_normalization=args.enable_normalization
                         )
+                        if file_stats:
+                            all_stats.append(file_stats)
+                            total_original_duration += file_stats['original_duration_ms']
+                            total_target_duration += file_stats['target_duration_ms']
+                            total_chunks += file_stats['chunks_count']
+                            total_output_size += file_stats['total_output_size_bytes']
                         processed_files += 1
                     except Exception as e:
                         print(f"\n!!! КРИТИЧЕСКАЯ ОШИБКА при обработке файла {input_file_path}: {e}")
                         print("    Продолжение со следующим файлом...\n")
                         error_files += 1
 
-        # --- Вывод статистики обработки --- 
+        # --- Вывод подробной статистики обработки --- 
+        total_processing_time = time.time() - total_start_time
+        
         print("\n======================================")
         print("Обработка завершена.")
         print(f"Найдено MP3 файлов: {found_files}")
@@ -692,6 +950,20 @@ if __name__ == "__main__":
             print(f"Файлов с ошибками/пропущено при обработке: {error_files}")
         print(f"Результаты сохранены в: {os.path.abspath(output_root_dir)}")
         print("======================================")
+        
+        # Выводим подробную статистику если есть обработанные файлы
+        if processed_files > 0 and all_stats:
+            print_processing_statistics(
+                all_stats, 
+                total_original_duration, 
+                total_target_duration,
+                total_chunks, 
+                total_output_size, 
+                total_processing_time,
+                processed_files, 
+                args.speed, 
+                args.enable_normalization
+            )
 
         # --- Копирование и Перемещение после обработки --- 
         if args.copy_to:

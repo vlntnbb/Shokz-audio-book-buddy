@@ -32,8 +32,11 @@
     "copy_to": "/Volumes/SWIM PRO",
     "copy_to_enabled": true,
     "tts_progress": true,
-    "norm_dbfs": -0.1,
-    "enable_normalization": true
+    "tts_progress_grid": true,
+    "norm_dbfs": 0.0,
+    "enable_normalization": true,
+    "skip_existing": false,
+    "copy_only": false
   },
   "my swim pro voice no copy": {
     "input_dir": "source_mp3",
@@ -46,8 +49,11 @@
     "copy_to": "/Volumes/SWIM PRO",
     "copy_to_enabled": false,
     "tts_progress": true,
+    "tts_progress_grid": true,
     "norm_dbfs": -0.1,
-    "enable_normalization": true
+    "enable_normalization": true,
+    "skip_existing": false,
+    "copy_only": false
   },
   "my swim pro copy only": {
     "input_dir": "source_mp3",

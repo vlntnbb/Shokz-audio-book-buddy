@@ -17,6 +17,7 @@ The primary way to use the program is through the graphical interface. File: `mp
 - Improved interface structure with grouped settings for better usability.
 - Folder selection via dialog boxes.
 - Copying to an external drive is optional (checkbox).
+- Voice progress messages with frequency limitation option (no more than every 5%).
 - Execution logs are displayed in real-time.
 - Stop process button.
 - Ability to set a custom application icon (see below).
@@ -29,8 +30,9 @@ The primary way to use the program is through the graphical interface. File: `mp
 - Playback speed adjustment (0.5–2.0, experimentally up to 10).
 - Peak volume normalization: each audio chunk can be normalized so that its loudest peak reaches a specified dBFS level (e.g., -0.1 dBFS). This helps to even out volume without clipping. Normalization is optional and configurable.
 - File copying and moving with integrity check (SHA256).
-- Insertion of voice progress messages (TTS, Mac/Win/Linux).
-- Detailed operation logs.
+- Insertion of voice progress messages (TTS, Mac/Win/Linux) with frequency limitation capability.
+- Detailed operation logs with progress indication at all stages.
+- Correct Russian word inflection for TTS progress messages (e.g., 1 процент, 2 процента, 5 процентов, 1 час, 2 часа, 5 часов, etc.)
 
 ## Requirements
 
@@ -55,23 +57,23 @@ The primary way to use the program is through the graphical interface. File: `mp
 3.  **Create and activate a virtual environment (venv):**
     In the root folder of the project (e.g., `mp3-autocut-buddy`), execute:
     ```bash
-    python3 -m venv .venv_mp3autocut
+    python3 -m venv .venv312
     ```
-    This command will create a `.venv_mp3autocut` folder with an isolated Python environment.
+    This command will create a `.venv312` folder with an isolated Python environment.
     Activate it:
     -   macOS / Linux:
         ```bash
-        source .venv_mp3autocut/bin/activate
+        source .venv312/bin/activate
         ```
     -   Windows (Command Prompt):
         ```bash
-        .venv_mp3autocut\Scripts\activate.bat
+        .venv312\Scripts\activate.bat
         ```
     -   Windows (PowerShell):
         ```bash
-        .venv_mp3autocut\Scripts\Activate.ps1
+        .venv312\Scripts\Activate.ps1
         ```
-    After activation, your command line prompt should change, indicating the active environment (e.g., `(.venv_mp3autocut) your-prompt$`).
+    After activation, your command line prompt should change, indicating the active environment (e.g., `(.venv312) your-prompt$`).
 
 4.  **Install project dependencies:**
     With the virtual environment activated, install all necessary libraries:
@@ -86,10 +88,27 @@ The primary way to use the program is through the graphical interface. File: `mp
     python mp3_autocut_gui.py
     ```
 
+## Quick Start (macOS)
+
+For convenience, quick start files have been created:
+
+- **`setup_macos.command`** — initial setup (double-click)
+  - Checks Python and ffmpeg
+  - Creates virtual environment
+  - Installs all dependencies
+
+- **`start_gui.command`** — launch GUI program (double-click)
+  - Activates virtual environment
+  - Starts graphical interface
+  - Works from Finder with double-click
+
+- **`start_gui.sh`** — terminal launch
+  - Simple start: `./start_gui.sh`
+
 ## Typical Usage Scenario (with GUI and venv)
 
 1.  Follow the steps in the "Installation and First Run" section.
-2.  Ensure your virtual environment (`.venv_mp3autocut`) is activated.
+2.  Ensure your virtual environment (`.venv312`) is activated.
 3.  Run the GUI: `python mp3_autocut_gui.py`.
 4.  In the interface, select the folder with the source MP3s (default is `source_mp3`).
 5.  Configure the desired splitting parameters (chunk duration, speed, etc.) or select a saved profile.
@@ -102,8 +121,8 @@ The primary way to use the program is through the graphical interface. File: `mp
 For those who prefer the command line or want to automate the process, the `split_mp3.py` file is available. **Don't forget to activate the virtual environment before running!**
 
 ```bash
-source .venv_mp3autocut/bin/activate  # macOS/Linux
-# .venv_mp3autocut\Scripts\activate  # Windows
+source .venv312/bin/activate  # macOS/Linux
+# .venv312\Scripts\activate  # Windows
 python split_mp3.py [parameters]
 ```
 
@@ -133,6 +152,7 @@ python split_mp3.py --copy-only --output-dir ready_mp3 --copy-to /Volumes/DRIVE
 - `-s, --speed` — speed factor (default: 1.0, range 0.5–10.0)
 - `--skip-existing` — skip files if results already exist
 - `--tts-progress` — insert voice progress message (percentage listened and total book duration; on Mac — Yuri voice, on Win/Linux — pyttsx3)
+- `--tts-progress-grid` — progress message no more than every 5%
 - `--copy-only` — only copy and move, do not process
 - `--copy-to` — path for copying (required for --copy-only or for copying after processing in GUI/CLI)
 - `--enable-normalization` — enable peak volume normalization.
@@ -176,6 +196,11 @@ python split_mp3.py --tts-progress
 Insert a voice progress message at the beginning of the first chunk of each file.
 
 ```bash
+python split_mp3.py --tts-progress --tts-progress-grid
+```
+Insert voice progress messages, but no more than every 5% (at 6%, 12%, 17%, 23%, etc.).
+
+```bash
 python split_mp3.py --enable-normalization --norm-dbfs -0.5
 ```
 Split files with default settings, enabling peak normalization to -0.5 dBFS.
@@ -194,6 +219,8 @@ Speed up audio by 1.2 times and apply peak normalization with the default target
 ## Notes
 - For correct operation, `ffmpeg` must be installed and available in PATH.
 - For TTS on Mac, the system voice Yuri (command `say`) is used; on Windows/Linux, the `pyttsx3` library is used (installed automatically with dependencies in venv).
+- The program shows detailed progress at all stages: file scanning, duration analysis (only when using TTS), processing of each file.
+- Duration analysis is performed only when the TTS progress option is enabled, which speeds up startup in normal mode.
 - All main splitting and processing logic is in `split_mp3.py`, which is used by the GUI as well.
 - All CLI parameters can also be viewed via `python split_mp3.py -h`.
 
@@ -234,12 +261,12 @@ Speed up audio by 1.2 times and apply peak normalization with the default target
      - If you have a suitable Python version installed, but the venv was created earlier with an older version, or you want to ensure the correct Python version is used for the venv, create (or recreate) the virtual environment, explicitly specifying the Python interpreter:
        ```bash
        # Example for Python 3.12 (ensure python3.12 is available)
-       python3.12 -m venv .venv_mp3autocut_py312 
-       source .venv_mp3autocut_py312/bin/activate
+       python3.12 -m venv .venv312_py312 
+       source .venv312_py312/bin/activate
        # Then install dependencies
        python -m pip install -r requirements.txt
        ```
-       Replace `.venv_mp3autocut_py312` with the desired venv folder name and `python3.12` with your actual command for launching the required Python version (e.g., `python3.9`, `python3.10`, etc.). If you are unsure which command corresponds to the required version, check with `python3.X --version`.
+       Replace `.venv312_py312` with the desired venv folder name and `python3.12` with your actual command for launching the required Python version (e.g., `python3.9`, `python3.10`, etc.). If you are unsure which command corresponds to the required version, check with `python3.X --version`.
 
 **4. `ffmpeg` not found**
    - **Symptom:** Message "ffmpeg not found or not available in PATH" during file processing.
@@ -266,3 +293,10 @@ Speed up audio by 1.2 times and apply peak normalization with the default target
 **9. Copying to external drive does not work**
     - **Symptom:** Errors during copying, files do not appear on the drive.
     - **Solution:** Check the correctness of the path to the drive, its connection, available free space, and write permissions. 
+
+## Pluralization Unit Tests
+Unit tests for Russian pluralization logic are included. Run:
+```
+python split_mp3.py --test-plural
+```
+All edge cases for percent/hour/minute are covered. 
